@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kasir Apotek POS Modern</title>
+    <title>Kasir Apotek (UJI)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -15,14 +15,14 @@
                 <i class="fa-solid fa-pills"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold tracking-wide">Klinik Utama BTIIG (Apotek POS)</h1>
-                <p class="text-xs text-emerald-100">Sistem Kasir & Validasi Stok Real-Time</p>
+                <h1 class="text-xl font-bold tracking-wide">Klinik Utama BTIIG (Apotek POS) - UJI</h1>
+                <p class="text-xs text-emerald-100">Versi uji: terhubung ke Database UJI</p>
             </div>
         </div>
         <div>
             <button onclick="bukaPengaturan()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-sm transition flex items-center space-x-2">
                 <i class="fa-solid fa-gear"></i>
-                <span class="hidden sm:inline">Webhook n8n</span>
+                <span class="hidden sm:inline">Backend</span>
             </button>
         </div>
     </header>
@@ -89,26 +89,24 @@
 
     <div id="modalPengaturan" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
-            <h3 class="text-lg font-bold text-slate-700 mb-2"><i class="fa-solid fa-link mr-2 text-emerald-600"></i>URL Webhook n8n (POST/Kirim)</h3>
-            <p class="text-xs text-slate-500 mb-4">Masukkan URL Webhook aktif untuk MENGIRIM data transaksi.</p>
-            <input type="text" id="inputWebhookUrl" placeholder="https://..."
+            <h3 class="text-lg font-bold text-slate-700 mb-2"><i class="fa-solid fa-link mr-2 text-emerald-600"></i>Alamat Backend (Google Apps Script)</h3>
+            <p class="text-xs text-slate-500 mb-4">Tempel alamat Web app yang berakhiran /exec. Satu alamat dipakai untuk membaca stok dan mencatat transaksi.</p>
+            <input type="text" id="inputBackendUrl" placeholder="https://script.google.com/macros/s/.../exec"
                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <div class="flex justify-end space-x-2">
                 <button onclick="tutupPengaturan()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 transition">Batal</button>
-                <button onclick="simpanWebhook()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 transition">Simpan</button>
+                <button onclick="simpanBackend()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 transition">Simpan</button>
             </div>
         </div>
     </div>
 
     <script>
         // ================= PENGATURAN =================
-        const GET_STOK_URL = "https://papkenz.app.n8n.cloud/webhook/get-stok";
-        const TIMEOUT_GET_MS = 15000;
-        const TIMEOUT_POST_MS = 20000;
-        const HARI_PERINGATAN_EXPIRED = 30; // peringatan jika sisa <= 30 hari
+        const TIMEOUT_GET_MS = 20000;
+        const TIMEOUT_POST_MS = 30000;
+        const HARI_PERINGATAN_EXPIRED = 30;
         const STOK_KRITIS = 10;
 
-        // Alias nama kolom (huruf besar/kecil diabaikan)
         const ALIAS = {
             id: ["id_barang", "id", "kode", "kode_barang", "sku"],
             nama: ["nama_obat", "nama", "nama_barang", "nama_produk", "produk"],
@@ -122,11 +120,10 @@
         let katalogObat = [];
         let keranjang = [];
         let sedangMemproses = false;
-        let webhookUrl = '';
-        try { webhookUrl = localStorage.getItem('n8n_webhook_url') || ''; } catch (e) { /* abaikan */ }
+        let backendUrl = '';
+        try { backendUrl = localStorage.getItem('backend_url') || ''; } catch (e) { /* abaikan */ }
 
         window.onload = function () {
-            // Klik tombol di katalog & keranjang (aman, tanpa onclick inline)
             document.getElementById('daftarObat').addEventListener('click', function (e) {
                 const tombol = e.target.closest('button[data-aksi]');
                 if (tombol && !tombol.disabled) tambahKeKeranjang(tombol.dataset.id);
@@ -145,14 +142,8 @@
                 return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
             });
         }
-
-        function rupiah(n) {
-            return "Rp " + Number(n).toLocaleString('id-ID');
-        }
-
-        function normKey(k) {
-            return String(k).toLowerCase().replace(/[\s\-]+/g, "_").trim();
-        }
+        function rupiah(n) { return "Rp " + Number(n).toLocaleString('id-ID'); }
+        function normKey(k) { return String(k).toLowerCase().replace(/[\s\-]+/g, "_").trim(); }
 
         function ambilNilai(baris, daftarAlias) {
             const peta = {};
@@ -162,13 +153,11 @@
             }
             return undefined;
         }
-
         function keAngka(v) {
             if (typeof v === "number") return Number.isFinite(v) ? v : 0;
             const n = parseInt(String(v == null ? "" : v).replace(/[^\d-]/g, ""), 10);
             return Number.isNaN(n) ? 0 : n;
         }
-
         function keTanggal(v) {
             if (!v) return null;
             const teks = String(v).trim();
@@ -179,39 +168,27 @@
             if (m) d = new Date(+m[3], +m[2] - 1, +m[1]);
             return d && !Number.isNaN(d.getTime()) ? d : null;
         }
-
         function hariSampai(tgl) {
             if (!tgl) return null;
             const hariIni = new Date();
             hariIni.setHours(0, 0, 0, 0);
             return Math.round((tgl - hariIni) / 86400000);
         }
-
-        // Waktu lokal perangkat (WIB), format: 2026-11-02 01:30:00
-        function waktuLokal() {
-            const d = new Date();
-            const p = function (n) { return String(n).padStart(2, '0'); };
-            return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
-                   p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
-        }
-
         function setStatus(pesan, error) {
             const el = document.getElementById('statusStok');
             el.textContent = pesan;
             el.className = error ? 'text-xs text-red-500 mb-3' : 'text-xs text-slate-400 mb-3';
         }
+        function urlDenganWaktu() {
+            return backendUrl + (backendUrl.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
+        }
 
         // ================= AMBIL & RAPIKAN DATA STOK =================
         function ratakanRespons(data) {
-            if (Array.isArray(data)) {
-                return data.flatMap(function (item) {
-                    if (item && item.json && typeof item.json === "object") return [item.json];
-                    return ratakanRespons(item);
-                });
-            }
+            if (Array.isArray(data)) return data;
             if (data && typeof data === "object") {
                 for (const kunci of ["data", "items", "produk", "rows", "result"]) {
-                    if (Array.isArray(data[kunci])) return ratakanRespons(data[kunci]);
+                    if (Array.isArray(data[kunci])) return data[kunci];
                 }
                 return [data];
             }
@@ -236,12 +213,14 @@
         }
 
         async function ambilStok() {
+            if (!backendUrl) throw new Error('BELUM_ADA_URL');
             const kontrol = new AbortController();
             const timer = setTimeout(function () { kontrol.abort(); }, TIMEOUT_GET_MS);
             try {
-                const res = await fetch(GET_STOK_URL + "?t=" + Date.now(), { method: "GET", signal: kontrol.signal });
+                const res = await fetch(urlDenganWaktu(), { method: "GET", signal: kontrol.signal });
                 if (!res.ok) throw new Error("Status " + res.status);
                 const data = await res.json();
+                if (data && data.error) throw new Error(data.error);
                 return ratakanRespons(data).map(rapikanProduk).filter(Boolean);
             } finally {
                 clearTimeout(timer);
@@ -251,6 +230,15 @@
         async function muatStok() {
             const btn = document.getElementById('btnMuatUlang');
             btn.disabled = true;
+
+            if (!backendUrl) {
+                setStatus("Alamat backend belum diisi. Ketuk tombol Backend di kanan atas.", true);
+                document.getElementById('daftarObat').innerHTML =
+                    '<p class="text-slate-400 text-center col-span-2 py-8 text-sm">Isi alamat backend di menu pengaturan terlebih dahulu.</p>';
+                btn.disabled = false;
+                return;
+            }
+
             setStatus("Memuat data stok...", false);
             try {
                 katalogObat = await ambilStok();
@@ -260,17 +248,16 @@
                 setStatus(katalogObat.length + " obat dimuat • diperbarui " + new Date().toLocaleTimeString('id-ID'), false);
             } catch (error) {
                 console.error("Gagal mengambil data:", error);
-                setStatus("Gagal memuat stok. Periksa internet lalu ketuk tombol muat ulang.", true);
+                setStatus("Gagal memuat stok: " + error.message, true);
                 if (katalogObat.length === 0) {
                     document.getElementById('daftarObat').innerHTML =
-                        '<p class="text-red-500 text-center col-span-2 py-8 text-sm">Gagal terhubung ke database. Cek koneksi atau URL Webhook GET.</p>';
+                        '<p class="text-red-500 text-center col-span-2 py-8 text-sm">Gagal terhubung ke database. Periksa alamat backend dan koneksi internet.</p>';
                 }
             } finally {
                 btn.disabled = false;
             }
         }
 
-        // Samakan isi keranjang dengan stok & harga terbaru
         function sinkronKeranjang() {
             keranjang = keranjang.filter(function (item) {
                 const terbaru = katalogObat.find(function (o) { return o.id === item.id; });
@@ -286,12 +273,10 @@
         // ================= KATALOG =================
         function tampilkanKatalog(data) {
             const container = document.getElementById('daftarObat');
-
             if (data.length === 0) {
                 container.innerHTML = '<p class="text-slate-400 text-center col-span-2 py-8 text-sm">Obat tidak ditemukan.</p>';
                 return;
             }
-
             container.innerHTML = data.map(function (item) {
                 const habis = item.stok <= 0;
                 const nonaktif = habis || item.sudahExpired;
@@ -316,9 +301,7 @@
                     infoExp = '<p class="text-xs font-semibold text-amber-600 mb-2">Exp ' + item.sisaHari + ' hari lagi</p>';
                 }
 
-                const kelasTombol = nonaktif
-                    ? 'bg-slate-300 cursor-not-allowed'
-                    : 'bg-slate-900 hover:bg-emerald-600';
+                const kelasTombol = nonaktif ? 'bg-slate-300 cursor-not-allowed' : 'bg-slate-900 hover:bg-emerald-600';
 
                 return '' +
                     '<div class="border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-emerald-200 transition p-4 rounded-xl flex flex-col justify-between ' + (nonaktif ? 'opacity-70' : '') + '">' +
@@ -355,15 +338,8 @@
         function tambahKeKeranjang(id) {
             const obat = katalogObat.find(function (o) { return o.id === id; });
             if (!obat) return;
-
-            if (obat.sudahExpired) {
-                alert("Obat ini sudah kedaluwarsa dan tidak dapat dijual!");
-                return;
-            }
-            if (obat.stok <= 0) {
-                alert("Stok obat ini kosong!");
-                return;
-            }
+            if (obat.sudahExpired) { alert("Obat ini sudah kedaluwarsa dan tidak dapat dijual!"); return; }
+            if (obat.stok <= 0) { alert("Stok obat ini kosong!"); return; }
 
             const itemDiKeranjang = keranjang.find(function (i) { return i.id === id; });
             if (itemDiKeranjang) {
@@ -381,7 +357,6 @@
         function ubahJumlah(id, delta) {
             const item = keranjang.find(function (i) { return i.id === id; });
             const obat = katalogObat.find(function (o) { return o.id === id; });
-
             if (item && obat) {
                 item.jumlah += delta;
                 if (item.jumlah > obat.stok) {
@@ -401,7 +376,6 @@
 
         function renderKeranjang() {
             const container = document.getElementById('itemKeranjang');
-
             if (keranjang.length === 0) {
                 container.innerHTML = '<p class="text-slate-400 text-center py-6 text-sm">Belum ada obat dipilih.</p>';
                 document.getElementById('labelTotal').innerText = 'Rp 0';
@@ -409,7 +383,6 @@
                 hitungKembalian();
                 return;
             }
-
             container.innerHTML = keranjang.map(function (item) {
                 return '' +
                     '<div class="py-3 flex justify-between items-center text-sm border-b border-slate-100">' +
@@ -424,7 +397,6 @@
                         '</div>' +
                     '</div>';
             }).join('');
-
             document.getElementById('labelTotal').innerText = rupiah(hitungTotal());
             document.getElementById('btnProses').disabled = sedangMemproses;
             hitungKembalian();
@@ -435,7 +407,6 @@
             const bayar = parseFloat(document.getElementById('inputBayar').value) || 0;
             const kembalian = bayar - total;
             const label = document.getElementById('labelKembalian');
-
             if (kembalian >= 0) {
                 label.innerText = rupiah(kembalian);
                 label.className = "font-bold text-emerald-600";
@@ -445,41 +416,42 @@
             }
         }
 
-        // ================= PENGATURAN WEBHOOK POST =================
+        // ================= PENGATURAN BACKEND =================
         function bukaPengaturan() {
-            document.getElementById('inputWebhookUrl').value = webhookUrl;
+            document.getElementById('inputBackendUrl').value = backendUrl;
             document.getElementById('modalPengaturan').classList.remove('hidden');
         }
-
         function tutupPengaturan() {
             document.getElementById('modalPengaturan').classList.add('hidden');
         }
-
-        function simpanWebhook() {
-            const nilai = document.getElementById('inputWebhookUrl').value.trim();
-            if (!nilai.startsWith('https://')) {
-                alert("URL harus diawali https://");
+        function simpanBackend() {
+            const nilai = document.getElementById('inputBackendUrl').value.trim();
+            if (!nilai.startsWith('https://script.google.com/')) {
+                alert("Alamat harus diawali https://script.google.com/ dan berakhiran /exec");
                 return;
             }
-            webhookUrl = nilai;
-            try { localStorage.setItem('n8n_webhook_url', webhookUrl); } catch (e) { /* abaikan */ }
+            backendUrl = nilai;
+            try { localStorage.setItem('backend_url', backendUrl); } catch (e) { /* abaikan */ }
             tutupPengaturan();
-            alert("URL Webhook n8n berhasil disimpan!");
+            katalogObat = [];
+            keranjang = [];
+            renderKeranjang();
+            muatStok();
         }
 
         // ================= PROSES TRANSAKSI =================
         async function prosesTransaksi() {
             if (sedangMemproses) return;
-
-            if (!webhookUrl) {
-                alert("Harap masukkan URL Webhook POST terlebih dahulu di menu Pengaturan!");
+            if (!backendUrl) {
+                alert("Harap isi alamat backend di menu pengaturan terlebih dahulu!");
                 bukaPengaturan();
                 return;
             }
             if (keranjang.length === 0) return;
 
-            let bayar = parseFloat(document.getElementById('inputBayar').value) || 0;
-            if (bayar < hitungTotal()) {
+            const total = hitungTotal();
+            const bayar = parseFloat(document.getElementById('inputBayar').value) || 0;
+            if (bayar < total) {
                 alert("Uang tunai pembeli masih kurang!");
                 return;
             }
@@ -491,58 +463,18 @@
             btnProses.disabled = true;
 
             try {
-                // 1. Periksa ulang stok terbaru sebelum mengirim
-                try {
-                    katalogObat = await ambilStok();
-                } catch (err) {
-                    alert("Tidak bisa memeriksa stok terbaru. Periksa internet lalu coba lagi.");
-                    return;
-                }
-
-                const masalah = [];
-                keranjang.forEach(function (item) {
-                    const terbaru = katalogObat.find(function (o) { return o.id === item.id; });
-                    if (!terbaru) masalah.push(item.nama + ": tidak ditemukan di database");
-                    else if (terbaru.sudahExpired) masalah.push(item.nama + ": sudah kedaluwarsa");
-                    else if (item.jumlah > terbaru.stok) masalah.push(item.nama + ": sisa stok " + terbaru.stok);
-                });
-
-                if (masalah.length > 0) {
-                    sinkronKeranjang();
-                    filterObat();
-                    renderKeranjang();
-                    alert("Transaksi dibatalkan karena stok berubah:\n- " + masalah.join("\n- ") + "\n\nKeranjang sudah disesuaikan. Silakan periksa lalu proses ulang.");
-                    return;
-                }
-
-                // 2. Samakan harga terbaru, lalu hitung ulang total
-                sinkronKeranjang();
-                const total = hitungTotal();
-                bayar = parseFloat(document.getElementById('inputBayar').value) || 0;
-                if (bayar < total) {
-                    renderKeranjang();
-                    alert("Total berubah menjadi " + rupiah(total) + ". Uang tunai pembeli masih kurang!");
-                    return;
-                }
-
-                // 3. Kirim ke n8n (format data sama seperti sebelumnya)
+                // Server memakai harga dari sheet dan memeriksa stok sendiri.
                 const dataTransaksi = {
-                    tanggal: waktuLokal(),
-                    items: keranjang.map(function (i) {
-                        return { id: i.id, nama: i.nama, harga: i.harga, stok: i.stok, jumlah: i.jumlah };
-                    }),
-                    totalBelanja: total,
-                    uangBayar: bayar,
-                    uangKembalian: bayar - total
+                    items: keranjang.map(function (i) { return { id: i.id, jumlah: i.jumlah }; })
                 };
 
                 const kontrol = new AbortController();
                 const timer = setTimeout(function () { kontrol.abort(); }, TIMEOUT_POST_MS);
                 let response;
                 try {
-                    response = await fetch(webhookUrl, {
+                    response = await fetch(backendUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify(dataTransaksi),
                         signal: kontrol.signal
                     });
@@ -550,20 +482,27 @@
                     clearTimeout(timer);
                 }
 
-                if (response.ok) {
-                    alert("Transaksi Berhasil Diproses!");
+                let hasil = null;
+                try { hasil = await response.json(); } catch (e) { /* bukan JSON */ }
+
+                if (response.ok && hasil && hasil.ok) {
+                    const totalServer = Number(hasil.total) || total;
+                    alert("Transaksi berhasil!\nNo: " + hasil.idTransaksi +
+                          "\nTotal: " + rupiah(totalServer) +
+                          "\nKembalian: " + rupiah(bayar - totalServer));
                     keranjang = [];
                     document.getElementById('inputBayar').value = '';
                     renderKeranjang();
-                    muatStok(); // sinkron stok terbaru dari Google Sheets
                 } else {
-                    alert("Gagal mengirim data ke n8n (status " + response.status + "). Transaksi belum tercatat.");
+                    const alasan = hasil && hasil.pesan ? hasil.pesan : ("status " + response.status);
+                    alert("Transaksi gagal dan belum tercatat:\n" + alasan);
                 }
+                muatStok(); // selalu sinkron stok terbaru
             } catch (error) {
                 console.error(error);
                 alert(error.name === 'AbortError'
-                    ? "Koneksi ke n8n terlalu lama. Cek di Google Sheets apakah transaksi sudah tercatat sebelum mengulang."
-                    : "Terjadi kesalahan jaringan saat menghubungi n8n.");
+                    ? "Koneksi terlalu lama. Periksa di sheet apakah transaksi sudah tercatat sebelum mengulang."
+                    : "Terjadi kesalahan jaringan. Periksa internet lalu cek sheet sebelum mengulang.");
             } finally {
                 sedangMemproses = false;
                 btnProses.innerHTML = teksAsliBtn;
