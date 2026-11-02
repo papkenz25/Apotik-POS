@@ -15,14 +15,14 @@
                 <i class="fa-solid fa-store"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold tracking-wide">Papkenz <span class="font-light">Kasir</span></h1>
-                <p class="text-xs text-emerald-100">Kelola usaha Anda, Mulai dari Kasir</p>
+                <h1 id="judulToko" class="text-xl font-bold tracking-wide">Papkenz <span class="font-light">Kasir</span></h1>
+                <p id="subJudulToko" class="text-xs text-emerald-100">Kelola usaha Anda, Mulai dari Kasir</p>
             </div>
         </div>
         <div>
             <button onclick="bukaPengaturan()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-sm transition flex items-center space-x-2">
                 <i class="fa-solid fa-gear"></i>
-                <span class="hidden sm:inline">Backend</span>
+                <span class="hidden sm:inline">Pengaturan</span>
             </button>
         </div>
     </header>
@@ -87,16 +87,57 @@
         </section>
     </main>
 
+    <!-- Jendela pengaturan -->
     <div id="modalPengaturan" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
-            <h3 class="text-lg font-bold text-slate-700 mb-2"><i class="fa-solid fa-link mr-2 text-emerald-600"></i>Alamat Backend (Google Apps Script)</h3>
-            <p class="text-xs text-slate-500 mb-4">Tempel alamat Web app yang berakhiran /exec. Satu alamat dipakai untuk membaca stok dan mencatat transaksi.</p>
+            <h3 class="text-lg font-bold text-slate-700 mb-4"><i class="fa-solid fa-gear mr-2 text-emerald-600"></i>Pengaturan</h3>
+
+            <label class="block text-xs font-medium text-slate-500 mb-1">Nama Toko (tampil di header dan struk)</label>
+            <input type="text" id="inputNamaToko" maxlength="60" placeholder="Contoh: Apotek Sehat"
+                   class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
+            <label class="block text-xs font-medium text-slate-500 mb-1">Alamat Backend (Google Apps Script)</label>
+            <p class="text-xs text-slate-400 mb-2">Alamat Web app yang berakhiran /exec. Satu alamat dipakai untuk membaca stok dan mencatat transaksi.</p>
             <input type="text" id="inputBackendUrl" placeholder="https://script.google.com/macros/s/.../exec"
                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
             <div class="flex justify-end space-x-2">
                 <button onclick="tutupPengaturan()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 transition">Batal</button>
-                <button onclick="simpanBackend()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 transition">Simpan</button>
+                <button onclick="simpanPengaturan()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 transition">Simpan</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Jendela struk -->
+    <div id="modalStruk" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl max-h-[95vh] overflow-y-auto">
+            <div class="text-center mb-3">
+                <div class="inline-flex w-12 h-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl mb-2">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-700">Transaksi berhasil</h3>
+                <p id="strukNomor" class="text-xs text-slate-400"></p>
+            </div>
+
+            <div id="strukRincian" class="text-sm divide-y divide-slate-100 mb-3 max-h-48 overflow-y-auto"></div>
+
+            <div class="space-y-1 text-sm mb-4">
+                <div class="flex justify-between"><span class="text-slate-500">Total</span><span id="strukTotal" class="font-bold text-slate-700"></span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Tunai</span><span id="strukBayar" class="text-slate-700"></span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Kembalian</span><span id="strukKembali" class="font-bold text-emerald-600"></span></div>
+            </div>
+
+            <label class="block text-xs font-medium text-slate-500 mb-1">Nomor WhatsApp pembeli (opsional)</label>
+            <input type="tel" inputmode="numeric" id="inputNomorWa" oninput="perbaruiLinkWa()" placeholder="08xxxxxxxxxx"
+                   class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
+            <a id="btnWa" href="#" target="_blank" rel="noopener"
+               class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition shadow-sm text-sm flex items-center justify-center space-x-2 mb-2">
+                <i class="fa-brands fa-whatsapp"></i>
+                <span>Kirim struk via WhatsApp</span>
+            </a>
+            <button onclick="tutupStruk()" class="w-full border border-slate-200 text-slate-600 py-2.5 rounded-xl text-sm hover:bg-slate-50 transition">Selesai</button>
+            <p class="text-[11px] text-slate-400 mt-2 text-center">Nomor pembeli tidak disimpan. Kosongkan nomor untuk memilih kontak di WhatsApp.</p>
         </div>
     </div>
 
@@ -106,6 +147,7 @@
         const TIMEOUT_POST_MS = 30000;
         const HARI_PERINGATAN_EXPIRED = 180;
         const STOK_KRITIS = 10;
+        const NAMA_DEFAULT = 'Papkenz Kasir';
 
         const ALIAS = {
             id: ["id_barang", "id", "kode", "kode_barang", "sku"],
@@ -120,8 +162,13 @@
         let katalogObat = [];
         let keranjang = [];
         let sedangMemproses = false;
+        let strukTerakhir = null;
         let backendUrl = '';
-        try { backendUrl = localStorage.getItem('backend_url') || ''; } catch (e) { /* abaikan */ }
+        let namaToko = '';
+        try {
+            backendUrl = localStorage.getItem('backend_url') || '';
+            namaToko = localStorage.getItem('nama_toko') || '';
+        } catch (e) { /* abaikan */ }
 
         window.onload = function () {
             document.getElementById('daftarObat').addEventListener('click', function (e) {
@@ -133,6 +180,7 @@
                 if (!tombol) return;
                 ubahJumlah(tombol.dataset.id, tombol.dataset.aksi === 'tambah' ? 1 : -1);
             });
+            terapkanNamaToko();
             muatStok();
         };
 
@@ -181,6 +229,21 @@
         }
         function urlDenganWaktu() {
             return backendUrl + (backendUrl.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
+        }
+
+        // ================= NAMA TOKO =================
+        function terapkanNamaToko() {
+            const judul = document.getElementById('judulToko');
+            const sub = document.getElementById('subJudulToko');
+            if (namaToko) {
+                judul.textContent = namaToko;
+                sub.textContent = 'Ditenagai ' + NAMA_DEFAULT;
+                document.title = namaToko;
+            } else {
+                judul.innerHTML = 'Papkenz <span class="font-light">Kasir</span>';
+                sub.textContent = 'Kelola usaha Anda, Mulai dari Kasir';
+                document.title = NAMA_DEFAULT;
+            }
         }
 
         // ================= AMBIL & RAPIKAN DATA STOK =================
@@ -232,7 +295,7 @@
             btn.disabled = true;
 
             if (!backendUrl) {
-                setStatus("Alamat backend belum diisi. Ketuk tombol Backend di kanan atas.", true);
+                setStatus("Alamat backend belum diisi. Ketuk tombol Pengaturan di kanan atas.", true);
                 document.getElementById('daftarObat').innerHTML =
                     '<p class="text-slate-400 text-center col-span-2 py-8 text-sm">Isi alamat backend di menu pengaturan terlebih dahulu.</p>';
                 btn.disabled = false;
@@ -416,27 +479,95 @@
             }
         }
 
-        // ================= PENGATURAN BACKEND =================
+        // ================= PENGATURAN =================
         function bukaPengaturan() {
             document.getElementById('inputBackendUrl').value = backendUrl;
+            document.getElementById('inputNamaToko').value = namaToko;
             document.getElementById('modalPengaturan').classList.remove('hidden');
         }
         function tutupPengaturan() {
             document.getElementById('modalPengaturan').classList.add('hidden');
         }
-        function simpanBackend() {
-            const nilai = document.getElementById('inputBackendUrl').value.trim();
-            if (!nilai.startsWith('https://script.google.com/')) {
-                alert("Alamat harus diawali https://script.google.com/ dan berakhiran /exec");
+        function simpanPengaturan() {
+            const url = document.getElementById('inputBackendUrl').value.trim();
+            const nama = document.getElementById('inputNamaToko').value.trim().slice(0, 60);
+            if (!url.startsWith('https://script.google.com/')) {
+                alert("Alamat backend harus diawali https://script.google.com/ dan berakhiran /exec");
                 return;
             }
-            backendUrl = nilai;
-            try { localStorage.setItem('backend_url', backendUrl); } catch (e) { /* abaikan */ }
+            const urlBerubah = url !== backendUrl;
+            backendUrl = url;
+            namaToko = nama;
+            try {
+                localStorage.setItem('backend_url', backendUrl);
+                localStorage.setItem('nama_toko', namaToko);
+            } catch (e) { /* abaikan */ }
+            terapkanNamaToko();
             tutupPengaturan();
-            katalogObat = [];
-            keranjang = [];
-            renderKeranjang();
-            muatStok();
+            if (urlBerubah) {
+                katalogObat = [];
+                keranjang = [];
+                renderKeranjang();
+                muatStok();
+            }
+        }
+
+        // ================= STRUK WHATSAPP =================
+        function normalisasiNomor(v) {
+            let n = String(v == null ? '' : v).replace(/[^\d]/g, '');
+            if (!n) return '';
+            if (n.startsWith('0')) n = '62' + n.slice(1);
+            else if (n.startsWith('8')) n = '62' + n;
+            return n;
+        }
+
+        function bangunTeksStruk() {
+            const s = strukTerakhir;
+            if (!s) return '';
+            const nama = namaToko || NAMA_DEFAULT;
+            const tgl = s.waktu.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) +
+                        ' ' + s.waktu.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const baris = ['*' + nama + '*', 'Struk Pembelian', 'No: ' + s.id, tgl, ''];
+            s.items.forEach(function (i) {
+                baris.push(i.nama);
+                baris.push('  ' + i.jumlah + ' x ' + rupiah(i.hargaJual) + ' = ' + rupiah(i.jumlah * i.hargaJual));
+            });
+            baris.push('', 'Total: ' + rupiah(s.total), 'Tunai: ' + rupiah(s.bayar),
+                       'Kembali: ' + rupiah(s.bayar - s.total), '', 'Terima kasih');
+            return baris.join('\n');
+        }
+
+        function perbaruiLinkWa() {
+            const nomor = normalisasiNomor(document.getElementById('inputNomorWa').value);
+            const dasar = nomor ? 'https://wa.me/' + nomor : 'https://wa.me/';
+            document.getElementById('btnWa').href = dasar + '?text=' + encodeURIComponent(bangunTeksStruk());
+        }
+
+        function tampilkanStruk(data) {
+            strukTerakhir = data;
+            document.getElementById('strukNomor').innerText = 'No: ' + data.id;
+            document.getElementById('strukRincian').innerHTML = data.items.map(function (i) {
+                return '' +
+                    '<div class="py-2 flex justify-between gap-3">' +
+                        '<div>' +
+                            '<p class="font-medium text-slate-700">' + aman(i.nama) + '</p>' +
+                            '<p class="text-xs text-slate-400">' + i.jumlah + ' x ' + rupiah(i.hargaJual) + '</p>' +
+                        '</div>' +
+                        '<p class="font-medium text-slate-700 whitespace-nowrap">' + rupiah(i.jumlah * i.hargaJual) + '</p>' +
+                    '</div>';
+            }).join('');
+            document.getElementById('strukTotal').innerText = rupiah(data.total);
+            document.getElementById('strukBayar').innerText = rupiah(data.bayar);
+            document.getElementById('strukKembali').innerText = rupiah(data.bayar - data.total);
+            document.getElementById('inputNomorWa').value = '';
+            perbaruiLinkWa();
+            document.getElementById('modalStruk').classList.remove('hidden');
+        }
+
+        function tutupStruk() {
+            document.getElementById('modalStruk').classList.add('hidden');
+            document.getElementById('inputNomorWa').value = '';
+            strukTerakhir = null;
         }
 
         // ================= PROSES TRANSAKSI =================
@@ -487,12 +618,17 @@
 
                 if (response.ok && hasil && hasil.ok) {
                     const totalServer = Number(hasil.total) || total;
-                    alert("Transaksi berhasil!\nNo: " + hasil.idTransaksi +
-                          "\nTotal: " + rupiah(totalServer) +
-                          "\nKembalian: " + rupiah(bayar - totalServer));
+                    const daftarItem = Array.isArray(hasil.items) ? hasil.items : [];
                     keranjang = [];
                     document.getElementById('inputBayar').value = '';
                     renderKeranjang();
+                    tampilkanStruk({
+                        id: hasil.idTransaksi,
+                        items: daftarItem,
+                        total: totalServer,
+                        bayar: bayar,
+                        waktu: new Date()
+                    });
                 } else {
                     const alasan = hasil && hasil.pesan ? hasil.pesan : ("status " + response.status);
                     alert("Transaksi gagal dan belum tercatat:\n" + alasan);
@@ -512,3 +648,4 @@
     </script>
 </body>
 </html>
+
