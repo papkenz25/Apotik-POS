@@ -3,9 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Papkenz Kasir">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#059669">
     <title>Papkenz Kasir</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        #areaStruk { font-family: 'Courier New', Courier, monospace; }
+        @media print {
+            @page { size: 80mm auto; margin: 4mm; }
+            html, body { background: #fff !important; min-height: 0 !important; }
+            body > *:not(#modalStruk) { display: none !important; }
+            #modalStruk { position: static !important; display: block !important; background: transparent !important; padding: 0 !important; }
+            #modalStruk > div { max-width: none !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; padding: 0 !important; background: #fff !important; }
+            #areaStruk { border: none !important; padding: 0 !important; margin: 0 !important; }
+            .tanpa-cetak { display: none !important; }
+        }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
 
@@ -89,7 +106,7 @@
 
     <!-- Jendela pengaturan -->
     <div id="modalPengaturan" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl max-h-[95vh] overflow-y-auto">
             <h3 class="text-lg font-bold text-slate-700 mb-4"><i class="fa-solid fa-gear mr-2 text-emerald-600"></i>Pengaturan</h3>
 
             <label class="block text-xs font-medium text-slate-500 mb-1">Nama Toko (tampil di header dan struk)</label>
@@ -101,6 +118,11 @@
             <input type="text" id="inputBackendUrl" placeholder="https://script.google.com/macros/s/.../exec"
                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500">
 
+            <label class="block text-xs font-medium text-slate-500 mb-1">Kunci Akses</label>
+            <p class="text-xs text-slate-400 mb-2">Isi sama persis dengan kunci di server. Kosongkan jika server belum memakai kunci.</p>
+            <input type="password" id="inputKunciAkses" autocomplete="off" placeholder="Kunci akses"
+                   class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
             <div class="flex justify-end space-x-2">
                 <button onclick="tutupPengaturan()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 transition">Batal</button>
                 <button onclick="simpanPengaturan()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700 transition">Simpan</button>
@@ -110,34 +132,54 @@
 
     <!-- Jendela struk -->
     <div id="modalStruk" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl max-h-[95vh] overflow-y-auto">
-            <div class="text-center mb-3">
-                <div class="inline-flex w-12 h-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl mb-2">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl max-h-[95vh] overflow-y-auto">
+
+            <div class="tanpa-cetak text-center mb-3">
+                <div class="inline-flex w-10 h-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-lg mb-1">
                     <i class="fa-solid fa-check"></i>
                 </div>
                 <h3 class="text-lg font-bold text-slate-700">Transaksi berhasil</h3>
-                <p id="strukNomor" class="text-xs text-slate-400"></p>
             </div>
 
-            <div id="strukRincian" class="text-sm divide-y divide-slate-100 mb-3 max-h-48 overflow-y-auto"></div>
-
-            <div class="space-y-1 text-sm mb-4">
-                <div class="flex justify-between"><span class="text-slate-500">Total</span><span id="strukTotal" class="font-bold text-slate-700"></span></div>
-                <div class="flex justify-between"><span class="text-slate-500">Tunai</span><span id="strukBayar" class="text-slate-700"></span></div>
-                <div class="flex justify-between"><span class="text-slate-500">Kembalian</span><span id="strukKembali" class="font-bold text-emerald-600"></span></div>
+            <!-- Nota (bagian ini yang dicetak / disimpan PDF) -->
+            <div id="areaStruk" class="bg-white border border-dashed border-slate-300 rounded-lg p-4 text-[13px] leading-snug text-slate-800 mb-4">
+                <div class="text-center">
+                    <p id="strukToko" class="font-bold text-base"></p>
+                    <p class="text-xs">Struk Pembelian</p>
+                </div>
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+                <div class="text-xs">
+                    <p id="strukWaktu"></p>
+                    <p id="strukNomor"></p>
+                </div>
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+                <div id="strukRincian"></div>
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+                <div class="flex justify-between font-bold"><span>TOTAL</span><span id="strukTotal"></span></div>
+                <div class="flex justify-between"><span>Tunai</span><span id="strukBayar"></span></div>
+                <div class="flex justify-between"><span>Kembali</span><span id="strukKembali"></span></div>
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+                <p class="text-center text-xs">Terima kasih atas kunjungan Anda</p>
             </div>
 
-            <label class="block text-xs font-medium text-slate-500 mb-1">Nomor WhatsApp pembeli (opsional)</label>
-            <input type="tel" inputmode="numeric" id="inputNomorWa" oninput="perbaruiLinkWa()" placeholder="08xxxxxxxxxx"
-                   class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <div class="tanpa-cetak">
+                <label class="block text-xs font-medium text-slate-500 mb-1">Nomor WhatsApp pembeli (opsional)</label>
+                <input type="tel" inputmode="numeric" id="inputNomorWa" oninput="perbaruiLinkWa()" placeholder="08xxxxxxxxxx"
+                       class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
 
-            <a id="btnWa" href="#" target="_blank" rel="noopener"
-               class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition shadow-sm text-sm flex items-center justify-center space-x-2 mb-2">
-                <i class="fa-brands fa-whatsapp"></i>
-                <span>Kirim struk via WhatsApp</span>
-            </a>
-            <button onclick="tutupStruk()" class="w-full border border-slate-200 text-slate-600 py-2.5 rounded-xl text-sm hover:bg-slate-50 transition">Selesai</button>
-            <p class="text-[11px] text-slate-400 mt-2 text-center">Nomor pembeli tidak disimpan. Kosongkan nomor untuk memilih kontak di WhatsApp.</p>
+                <a id="btnWa" href="#" target="_blank" rel="noopener"
+                   class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition shadow-sm text-sm flex items-center justify-center space-x-2 mb-2">
+                    <i class="fa-brands fa-whatsapp"></i>
+                    <span>Kirim struk via WhatsApp</span>
+                </a>
+                <button onclick="cetakStruk()"
+                        class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 rounded-xl transition shadow-sm text-sm flex items-center justify-center space-x-2 mb-2">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Cetak / Simpan PDF</span>
+                </button>
+                <button onclick="tutupStruk()" class="w-full border border-slate-200 text-slate-600 py-2.5 rounded-xl text-sm hover:bg-slate-50 transition">Selesai</button>
+                <p class="text-[11px] text-slate-400 mt-2 text-center">Nomor pembeli tidak disimpan. Untuk PDF: di jendela cetak ketuk Bagikan, lalu Simpan ke Berkas.</p>
+            </div>
         </div>
     </div>
 
@@ -148,6 +190,7 @@
         const HARI_PERINGATAN_EXPIRED = 180;
         const STOK_KRITIS = 10;
         const NAMA_DEFAULT = 'Papkenz Kasir';
+        const JENIS_POST = 'text/plain;charset=utf-8'; // tanpa preflight CORS
 
         const ALIAS = {
             id: ["id_barang", "id", "kode", "kode_barang", "sku"],
@@ -165,21 +208,40 @@
         let strukTerakhir = null;
         let backendUrl = '';
         let namaToko = '';
+        let kunciAkses = '';
         try {
             backendUrl = localStorage.getItem('backend_url') || '';
             namaToko = localStorage.getItem('nama_toko') || '';
+            kunciAkses = localStorage.getItem('kunci_akses') || '';
         } catch (e) { /* abaikan */ }
 
         window.onload = function () {
+            // Klik tombol di katalog (Pilih Obat) memakai jumlah yang diketik di kartu
             document.getElementById('daftarObat').addEventListener('click', function (e) {
                 const tombol = e.target.closest('button[data-aksi]');
-                if (tombol && !tombol.disabled) tambahKeKeranjang(tombol.dataset.id);
+                if (!tombol || tombol.disabled) return;
+                const kotak = tombol.parentElement.querySelector('input[data-qty]');
+                const jumlah = kotak ? parseInt(kotak.value, 10) : 1;
+                tambahKeKeranjang(tombol.dataset.id, Number.isInteger(jumlah) && jumlah > 0 ? jumlah : 1);
             });
+
+            // Klik + dan - di keranjang
             document.getElementById('itemKeranjang').addEventListener('click', function (e) {
                 const tombol = e.target.closest('button[data-aksi]');
                 if (!tombol) return;
                 ubahJumlah(tombol.dataset.id, tombol.dataset.aksi === 'tambah' ? 1 : -1);
             });
+
+            // Ketik jumlah langsung di keranjang (diproses saat selesai mengetik)
+            document.getElementById('itemKeranjang').addEventListener('change', function (e) {
+                const kotak = e.target.closest('input[data-aksi="set"]');
+                if (!kotak) return;
+                setJumlah(kotak.dataset.id, kotak.value);
+            });
+            document.getElementById('itemKeranjang').addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && e.target.matches('input[data-aksi="set"]')) e.target.blur();
+            });
+
             terapkanNamaToko();
             muatStok();
         };
@@ -280,10 +342,26 @@
             const kontrol = new AbortController();
             const timer = setTimeout(function () { kontrol.abort(); }, TIMEOUT_GET_MS);
             try {
-                const res = await fetch(urlDenganWaktu(), { method: "GET", signal: kontrol.signal });
+                let res;
+                if (kunciAkses) {
+                    // Server berkunci: stok diminta lewat POST dengan kunci akses
+                    res = await fetch(backendUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': JENIS_POST },
+                        body: JSON.stringify({ aksi: 'stok', kunci: kunciAkses }),
+                        signal: kontrol.signal
+                    });
+                } else {
+                    // Server terbuka (belum memakai kunci)
+                    res = await fetch(urlDenganWaktu(), { method: 'GET', signal: kontrol.signal });
+                }
                 if (!res.ok) throw new Error("Status " + res.status);
                 const data = await res.json();
                 if (data && data.error) throw new Error(data.error);
+                if (data && data.ok === false) throw new Error(data.pesan || 'Ditolak server');
+                if (data && !Array.isArray(data) && !Array.isArray(data.data) && data.pesan) {
+                    throw new Error(data.pesan + ' Isi Kunci Akses di Pengaturan.');
+                }
                 return ratakanRespons(data).map(rapikanProduk).filter(Boolean);
             } finally {
                 clearTimeout(timer);
@@ -314,7 +392,7 @@
                 setStatus("Gagal memuat stok: " + error.message, true);
                 if (katalogObat.length === 0) {
                     document.getElementById('daftarObat').innerHTML =
-                        '<p class="text-red-500 text-center col-span-2 py-8 text-sm">Gagal terhubung ke database. Periksa alamat backend dan koneksi internet.</p>';
+                        '<p class="text-red-500 text-center col-span-2 py-8 text-sm">Gagal terhubung ke database. Periksa alamat backend, kunci akses, dan koneksi internet.</p>';
                 }
             } finally {
                 btn.disabled = false;
@@ -377,10 +455,14 @@
                             '<p class="text-emerald-600 font-semibold text-sm mb-2">' + rupiah(item.harga) + '</p>' +
                             infoExp +
                         '</div>' +
-                        '<button data-aksi="tambah" data-id="' + aman(item.id) + '" ' + (nonaktif ? 'disabled' : '') +
-                            ' class="w-full ' + kelasTombol + ' text-white py-2 rounded-lg text-xs font-medium transition flex items-center justify-center space-x-1">' +
-                            '<i class="fa-solid fa-cart-plus"></i><span>Pilih Obat</span>' +
-                        '</button>' +
+                        '<div class="flex gap-2">' +
+                            '<input type="number" inputmode="numeric" min="1" value="1" data-qty="' + aman(item.id) + '" ' + (nonaktif ? 'disabled' : '') +
+                                ' class="w-16 px-2 py-2 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-100">' +
+                            '<button data-aksi="tambah" data-id="' + aman(item.id) + '" ' + (nonaktif ? 'disabled' : '') +
+                                ' class="flex-1 ' + kelasTombol + ' text-white py-2 rounded-lg text-xs font-medium transition flex items-center justify-center space-x-1">' +
+                                '<i class="fa-solid fa-cart-plus"></i><span>Pilih Obat</span>' +
+                            '</button>' +
+                        '</div>' +
                     '</div>';
             }).join('');
         }
@@ -398,21 +480,24 @@
         }
 
         // ================= KERANJANG =================
-        function tambahKeKeranjang(id) {
+        function tambahKeKeranjang(id, jumlah) {
+            const tambah = Number.isInteger(jumlah) && jumlah > 0 ? jumlah : 1;
             const obat = katalogObat.find(function (o) { return o.id === id; });
             if (!obat) return;
             if (obat.sudahExpired) { alert("Obat ini sudah kedaluwarsa dan tidak dapat dijual!"); return; }
             if (obat.stok <= 0) { alert("Stok obat ini kosong!"); return; }
 
             const itemDiKeranjang = keranjang.find(function (i) { return i.id === id; });
+            const sudahAda = itemDiKeranjang ? itemDiKeranjang.jumlah : 0;
+            let jumlahBaru = sudahAda + tambah;
+            if (jumlahBaru > obat.stok) {
+                alert("Jumlah melebihi sisa stok fisik (" + obat.stok + ")!");
+                jumlahBaru = obat.stok;
+            }
             if (itemDiKeranjang) {
-                if (itemDiKeranjang.jumlah < obat.stok) {
-                    itemDiKeranjang.jumlah++;
-                } else {
-                    alert("Jumlah melebihi sisa stok fisik!");
-                }
+                itemDiKeranjang.jumlah = jumlahBaru;
             } else {
-                keranjang.push({ id: obat.id, nama: obat.nama, harga: obat.harga, stok: obat.stok, jumlah: 1 });
+                keranjang.push({ id: obat.id, nama: obat.nama, harga: obat.harga, stok: obat.stok, jumlah: jumlahBaru });
             }
             renderKeranjang();
         }
@@ -429,6 +514,24 @@
                 if (item.jumlah <= 0) {
                     keranjang = keranjang.filter(function (i) { return i.id !== id; });
                 }
+            }
+            renderKeranjang();
+        }
+
+        // Jumlah diketik langsung di keranjang
+        function setJumlah(id, nilai) {
+            const item = keranjang.find(function (i) { return i.id === id; });
+            const obat = katalogObat.find(function (o) { return o.id === id; });
+            if (!item || !obat) { renderKeranjang(); return; }
+            const n = parseInt(nilai, 10);
+            if (Number.isNaN(n)) { renderKeranjang(); return; } // kosong/huruf: kembalikan
+            if (n <= 0) {
+                keranjang = keranjang.filter(function (i) { return i.id !== id; });
+            } else if (n > obat.stok) {
+                alert("Jumlah melebihi sisa stok fisik (" + obat.stok + ")!");
+                item.jumlah = obat.stok;
+            } else {
+                item.jumlah = n;
             }
             renderKeranjang();
         }
@@ -451,11 +554,12 @@
                     '<div class="py-3 flex justify-between items-center text-sm border-b border-slate-100">' +
                         '<div>' +
                             '<p class="font-bold text-slate-700">' + aman(item.nama) + '</p>' +
-                            '<p class="text-xs text-slate-400">' + rupiah(item.harga) + ' x ' + item.jumlah + '</p>' +
+                            '<p class="text-xs text-slate-400">' + rupiah(item.harga) + ' x ' + item.jumlah + ' = ' + rupiah(item.harga * item.jumlah) + '</p>' +
                         '</div>' +
-                        '<div class="flex items-center space-x-2">' +
+                        '<div class="flex items-center space-x-1">' +
                             '<button data-aksi="kurang" data-id="' + aman(item.id) + '" class="w-7 h-7 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-600 font-bold">-</button>' +
-                            '<span class="text-sm font-bold w-5 text-center">' + item.jumlah + '</span>' +
+                            '<input type="number" inputmode="numeric" min="0" value="' + item.jumlah + '" data-aksi="set" data-id="' + aman(item.id) + '" ' +
+                                'class="w-14 h-7 border border-slate-200 rounded-lg text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">' +
                             '<button data-aksi="tambah" data-id="' + aman(item.id) + '" class="w-7 h-7 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-600 font-bold">+</button>' +
                         '</div>' +
                     '</div>';
@@ -483,6 +587,7 @@
         function bukaPengaturan() {
             document.getElementById('inputBackendUrl').value = backendUrl;
             document.getElementById('inputNamaToko').value = namaToko;
+            document.getElementById('inputKunciAkses').value = kunciAkses;
             document.getElementById('modalPengaturan').classList.remove('hidden');
         }
         function tutupPengaturan() {
@@ -491,20 +596,23 @@
         function simpanPengaturan() {
             const url = document.getElementById('inputBackendUrl').value.trim();
             const nama = document.getElementById('inputNamaToko').value.trim().slice(0, 60);
+            const kunci = document.getElementById('inputKunciAkses').value.trim();
             if (!url.startsWith('https://script.google.com/')) {
                 alert("Alamat backend harus diawali https://script.google.com/ dan berakhiran /exec");
                 return;
             }
-            const urlBerubah = url !== backendUrl;
+            const perluMuatUlang = (url !== backendUrl) || (kunci !== kunciAkses);
             backendUrl = url;
             namaToko = nama;
+            kunciAkses = kunci;
             try {
                 localStorage.setItem('backend_url', backendUrl);
                 localStorage.setItem('nama_toko', namaToko);
+                localStorage.setItem('kunci_akses', kunciAkses);
             } catch (e) { /* abaikan */ }
             terapkanNamaToko();
             tutupPengaturan();
-            if (urlBerubah) {
+            if (perluMuatUlang) {
                 katalogObat = [];
                 keranjang = [];
                 renderKeranjang();
@@ -512,7 +620,7 @@
             }
         }
 
-        // ================= STRUK WHATSAPP =================
+        // ================= STRUK: WHATSAPP & CETAK =================
         function normalisasiNomor(v) {
             let n = String(v == null ? '' : v).replace(/[^\d]/g, '');
             if (!n) return '';
@@ -521,13 +629,16 @@
             return n;
         }
 
+        function formatWaktuStruk(d) {
+            return d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+                   ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        }
+
         function bangunTeksStruk() {
             const s = strukTerakhir;
             if (!s) return '';
             const nama = namaToko || NAMA_DEFAULT;
-            const tgl = s.waktu.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) +
-                        ' ' + s.waktu.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            const baris = ['*' + nama + '*', 'Struk Pembelian', 'No: ' + s.id, tgl, ''];
+            const baris = ['*' + nama + '*', 'Struk Pembelian', 'No: ' + s.id, formatWaktuStruk(s.waktu), ''];
             s.items.forEach(function (i) {
                 baris.push(i.nama);
                 baris.push('  ' + i.jumlah + ' x ' + rupiah(i.hargaJual) + ' = ' + rupiah(i.jumlah * i.hargaJual));
@@ -545,15 +656,17 @@
 
         function tampilkanStruk(data) {
             strukTerakhir = data;
+            document.getElementById('strukToko').innerText = namaToko || NAMA_DEFAULT;
+            document.getElementById('strukWaktu').innerText = formatWaktuStruk(data.waktu);
             document.getElementById('strukNomor').innerText = 'No: ' + data.id;
             document.getElementById('strukRincian').innerHTML = data.items.map(function (i) {
                 return '' +
-                    '<div class="py-2 flex justify-between gap-3">' +
-                        '<div>' +
-                            '<p class="font-medium text-slate-700">' + aman(i.nama) + '</p>' +
-                            '<p class="text-xs text-slate-400">' + i.jumlah + ' x ' + rupiah(i.hargaJual) + '</p>' +
+                    '<div class="py-1">' +
+                        '<p class="font-medium">' + aman(i.nama) + '</p>' +
+                        '<div class="flex justify-between text-xs">' +
+                            '<span>' + i.jumlah + ' x ' + rupiah(i.hargaJual) + '</span>' +
+                            '<span>' + rupiah(i.jumlah * i.hargaJual) + '</span>' +
                         '</div>' +
-                        '<p class="font-medium text-slate-700 whitespace-nowrap">' + rupiah(i.jumlah * i.hargaJual) + '</p>' +
                     '</div>';
             }).join('');
             document.getElementById('strukTotal').innerText = rupiah(data.total);
@@ -562,6 +675,17 @@
             document.getElementById('inputNomorWa').value = '';
             perbaruiLinkWa();
             document.getElementById('modalStruk').classList.remove('hidden');
+        }
+
+        function cetakStruk() {
+            if (!strukTerakhir) return;
+            const judulAsli = document.title;
+            document.title = 'Struk-' + strukTerakhir.id; // jadi nama file PDF
+            window.onafterprint = function () {
+                document.title = judulAsli;
+                window.onafterprint = null;
+            };
+            window.print();
         }
 
         function tutupStruk() {
@@ -596,6 +720,8 @@
             try {
                 // Server memakai harga dari sheet dan memeriksa stok sendiri.
                 const dataTransaksi = {
+                    aksi: 'transaksi',
+                    kunci: kunciAkses,
                     items: keranjang.map(function (i) { return { id: i.id, jumlah: i.jumlah }; })
                 };
 
@@ -605,7 +731,7 @@
                 try {
                     response = await fetch(backendUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        headers: { 'Content-Type': JENIS_POST },
                         body: JSON.stringify(dataTransaksi),
                         signal: kontrol.signal
                     });
@@ -629,6 +755,9 @@
                         bayar: bayar,
                         waktu: new Date()
                     });
+                } else if (hasil && hasil.kode === 'KUNCI_SALAH') {
+                    alert("Kunci akses salah atau belum diisi.\nIsi kunci yang benar di Pengaturan.");
+                    bukaPengaturan();
                 } else {
                     const alasan = hasil && hasil.pesan ? hasil.pesan : ("status " + response.status);
                     alert("Transaksi gagal dan belum tercatat:\n" + alasan);
@@ -648,4 +777,3 @@
     </script>
 </body>
 </html>
-
