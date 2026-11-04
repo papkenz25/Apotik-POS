@@ -389,7 +389,8 @@ function cariObat(id) {
 async function refreshStok(diam) {
   const j = await panggil('stok', null, { diam: diam });
   if (!j) return;
-  S.stok = j.data || [];
+  // Baris tanpa nama (misalnya hanya berisi dropdown Satuan) bukan produk
+  S.stok = (j.data || []).filter(function (o) { return String(o.Nama_Obat == null ? '' : o.Nama_Obat).trim() !== ''; });
   selaraskanKeranjang();
   if (S.view === 'kasir') gambarKatalog();
   gambarKeranjang();
@@ -1179,7 +1180,7 @@ async function muatStok() {
     el.innerHTML = '<p class="text-center text-slate-400 py-10">Memuat stok...</p>';
     const j = await panggil('produk');
     if (!j) { el.innerHTML = '<p class="text-center text-slate-400 py-10">Stok belum bisa dimuat. Ketuk tombol segarkan di kanan atas.</p>'; return; }
-    S.produk = j.data || [];
+    S.produk = (j.data || []).filter(function (o) { return String(o.Nama_Obat == null ? '' : o.Nama_Obat).trim() !== '' || String(o.ID_Barang == null ? '' : o.ID_Barang).trim() !== ''; });
     S.produkKolom = j.kolom || { kategori: true, satuan: true };
     S.produkRingkas = j.ringkas || null;
   } else {
@@ -1280,6 +1281,27 @@ A.filterStok = function (d) { S.stokFilter = d.k; S.stokBatas = 100; gambarFilte
 A.stokLagi = function () { S.stokBatas += 100; gambarDaftarStok(); };
 
 // ---------- Rilis B: tambah / ubah produk ----------
+const SATUAN_UMUM = ['tablet', 'kapsul', 'strip', 'box', 'tube', 'sachet', 'pcs'];
+function opsiSatuan(sekarang) {
+  const daftar = SATUAN_UMUM.slice();
+  const ada = function (x) { return daftar.some(function (d) { return d.toLowerCase() === x.toLowerCase(); }); };
+  (S.produk || []).forEach(function (p) {
+    const x = String(p.Satuan || '').trim();
+    if (x && !ada(x)) daftar.push(x);
+  });
+  const cur = String(sekarang || '').trim();
+  if (cur && !ada(cur)) daftar.push(cur);
+  return daftar;
+}
+function kolomSatuan(sekarang) {
+  const cur = String(sekarang || '').trim().toLowerCase();
+  return '<label class="block text-sm font-medium">Satuan' +
+    '<select name="satuan" class="inp mt-1"><option value="">- pilih satuan -</option>' +
+    opsiSatuan(sekarang).map(function (x) {
+      return '<option value="' + esc(x) + '"' + (x.toLowerCase() === cur ? ' selected' : '') + '>' + esc(x) + '</option>';
+    }).join('') + '<option value="__lain">Lainnya (ketik sendiri)...</option></select>' +
+    '<input name="satuanLain" maxlength="20" class="inp mt-2 hidden" placeholder="Ketik satuan"></label>';
+}
 function formProduk(o) {
   const baru = !o;
   const k = S.produkKolom || { kategori: true, satuan: true };
@@ -1288,7 +1310,7 @@ function formProduk(o) {
     '<h2 class="text-lg font-bold">' + (baru ? 'Tambah Produk' : 'Ubah Produk') + '</h2>' +
     '<label class="block text-sm font-medium">Nama produk<input name="nama" maxlength="80" class="inp mt-1" value="' + isi('Nama_Obat') + '"></label>';
   if (k.kategori) h += '<label class="block text-sm font-medium">Kategori <span class="text-slate-400 font-normal">(opsional)</span><input name="kategori" maxlength="40" class="inp mt-1" value="' + isi('Kategori') + '"></label>';
-  if (k.satuan) h += '<label class="block text-sm font-medium">Satuan <span class="text-slate-400 font-normal">(strip, botol, dll.)</span><input name="satuan" maxlength="20" class="inp mt-1" value="' + isi('Satuan') + '"></label>';
+  if (k.satuan) h += kolomSatuan(o ? o.Satuan : '');
   h += '<div class="grid grid-cols-2 gap-2">' +
     '<label class="block text-sm font-medium">Harga jual<input name="hargaJual" inputmode="numeric" class="inp mt-1" value="' + (o ? num(o.Harga_Jual) : '') + '"></label>' +
     '<label class="block text-sm font-medium">Harga beli<input name="hpp" inputmode="numeric" class="inp mt-1" value="' + (o ? num(o.Harga_Beli_HPP) : '') + '"></label></div>';
@@ -1309,6 +1331,13 @@ F.produk = async function (f) {
   if (S.sibuk) return;
   const mode = f.dataset.mode;
   const v = function (n) { return f.elements[n] ? String(f.elements[n].value || '').trim() : ''; };
+  // Satuan: dari pilihan, atau ketikan sendiri bila memilih "Lainnya"
+  const satuanNilai = function () {
+    if (!f.elements.satuan) return '';
+    const x = v('satuan');
+    return x === '__lain' ? v('satuanLain') : x;
+  };
+  if (f.elements.satuan && v('satuan') === '__lain' && !v('satuanLain')) { toast('Ketik satuannya, atau pilih dari daftar.', 'err'); return; }
   const data = { mode: mode };
   if (mode === 'ubah') {
     data.id = f.dataset.id;
@@ -1318,18 +1347,21 @@ F.produk = async function (f) {
       hargaJual: num(o.Harga_Jual), hpp: num(o.Harga_Beli_HPP)
     };
     let ubah = 0;
-    ['nama', 'kategori', 'satuan'].forEach(function (n) {
+    ['nama', 'kategori'].forEach(function (n) {
       if (f.elements[n] && v(n) !== asal[n]) { data[n] = v(n); ubah++; }
     });
+    const sat = satuanNilai();
+    if (f.elements.satuan && sat !== '' && sat !== asal.satuan) { data.satuan = sat; ubah++; }
     ['hargaJual', 'hpp'].forEach(function (n) {
       if (f.elements[n] && v(n) !== '' && num(v(n)) !== asal[n]) { data[n] = v(n); ubah++; }
     });
     if (!ubah) { toast('Tidak ada yang diubah.'); return; }
     if (f.elements.nama && !v('nama')) { toast('Nama produk tidak boleh kosong.', 'err'); return; }
   } else {
-    ['nama', 'kategori', 'satuan', 'hargaJual', 'hpp', 'stokAwal', 'noBatch', 'tglExpired'].forEach(function (n) {
+    ['nama', 'kategori', 'hargaJual', 'hpp', 'stokAwal', 'noBatch', 'tglExpired'].forEach(function (n) {
       if (f.elements[n]) data[n] = v(n);
     });
+    if (f.elements.satuan) data.satuan = satuanNilai();
     if (!data.nama) { toast('Nama produk wajib diisi.', 'err'); return; }
     if (!data.hargaJual) { toast('Harga jual wajib diisi.', 'err'); return; }
     if (num(data.stokAwal) > 0 && !data.noBatch) { toast('No. batch wajib diisi bila ada stok awal.', 'err'); return; }
@@ -1621,6 +1653,10 @@ document.addEventListener('change', function (e) {
   const t = e.target;
   if (t.dataset && t.dataset.qty !== undefined) ubahQty(t.dataset.qty, t.value);
   else if (t.id === 'imp-file') prosesFileImpor(t);
+  else if (t.name === 'satuan' && t.tagName === 'SELECT' && t.form && t.form.elements.satuanLain) {
+    t.form.elements.satuanLain.classList.toggle('hidden', t.value !== '__lain');
+    if (t.value === '__lain') t.form.elements.satuanLain.focus();
+  }
   else if (t.id === 'imp-harga') { if (S.imp) { S.imp.ubahHarga = t.checked; if (S.imp.baris && !S.imp.selesai) periksaImpor(); } }
   else if (t.id === 'log-tgl') { S.logTgl = t.value; muatLog(); }
 });
