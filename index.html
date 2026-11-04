@@ -116,6 +116,9 @@
       </div>
     </section>
     <section id="v-riwayat" class="hidden"></section>
+    <section id="v-stok" class="hidden"></section>
+    <section id="v-import" class="hidden"></section>
+    <section id="v-log" class="hidden"></section>
     <section id="v-masuk" class="hidden"></section>
     <section id="v-ringkasan" class="hidden"></section>
     <section id="v-pengaturan" class="hidden"></section>
@@ -185,7 +188,9 @@ function tglJam(w) {
 const S = {
   url: '', kunci: '', token: '', peran: '', nama: '', izin: {}, set: {}, metode: ['Tunai'],
   legacy: false, masuk: false, stok: [], cari: '', filter: 'semua', keranjang: [], riwayat: [],
-  view: 'kasir', sibuk: false, metodePilih: 'Tunai', struk: null, masukId: '', lap: null
+  view: 'kasir', sibuk: false, metodePilih: 'Tunai', struk: null, masukId: '', lap: null,
+  produk: [], produkKolom: { kategori: true, satuan: true }, produkRingkas: null, stokCari: '', stokFilter: 'semua', stokBatas: 100,
+  imp: null, logTgl: ''
 };
 const A = {}; // aksi klik
 const F = {}; // aksi form
@@ -351,20 +356,26 @@ async function bukaApp() {
 const NAV = [
   { v: 'kasir', t: 'Kasir', i: 'fa-cash-register', ok: function () { return true; } },
   { v: 'riwayat', t: 'Riwayat', i: 'fa-clock-rotate-left', ok: function () { return true; } },
+  { v: 'stok', t: 'Stok', i: 'fa-warehouse', ok: function () { return true; } },
   { v: 'masuk', t: 'Barang Masuk', i: 'fa-boxes-stacked', ok: function () { return !!S.izin.masuk; } },
+  { v: 'import', t: 'Import', i: 'fa-file-import', sembunyi: true, ok: function () { return !S.legacy && !!S.izin.masuk; } },
   { v: 'ringkasan', t: 'Ringkasan', i: 'fa-chart-line', ok: function () { return !!(S.izin.ringkasan || S.izin.laporan); } },
+  { v: 'log', t: 'Aktivitas', i: 'fa-list-check', ok: function () { return !S.legacy && S.peran === 'pemilik'; } },
   { v: 'pengaturan', t: 'Pengaturan', i: 'fa-gear', ok: function () { return true; } }
 ];
 function showView(v) {
   if (!NAV.some(function (n) { return n.v === v && n.ok(); })) v = 'kasir';
   S.view = v;
   NAV.forEach(function (n) { $('v-' + n.v).classList.toggle('hidden', n.v !== v); });
-  $('nav').innerHTML = NAV.filter(function (n) { return n.ok(); }).map(function (n) {
+  $('nav').innerHTML = NAV.filter(function (n) { return n.ok() && !n.sembunyi; }).map(function (n) {
     return '<button data-a="nav" data-v="' + n.v + '" class="btn ' + (n.v === v ? 'btn-p' : 'btn-s') +
       '" style="padding:.5rem .9rem;white-space:nowrap"><i class="fa-solid ' + n.i + '"></i> ' + n.t + '</button>';
   }).join('');
   if (v === 'kasir') { gambarFilter(); gambarKatalog(); gambarKeranjang(); }
   if (v === 'riwayat') muatRiwayat();
+  if (v === 'stok') muatStok();
+  if (v === 'import') gambarImport();
+  if (v === 'log') gambarLog();
   if (v === 'masuk') gambarMasuk();
   if (v === 'ringkasan') gambarRingkasan();
   if (v === 'pengaturan') gambarPengaturan();
@@ -537,6 +548,8 @@ A.tutup = tutupModal;
 A.segarkan = function () {
   refreshStok();
   if (S.view === 'riwayat') muatRiwayat();
+  if (S.view === 'stok') muatStok();
+  if (S.view === 'log') muatLog();
 };
 A.ulangi = mulai;
 A.setupBuka = function () { setupTampil(); };
@@ -783,7 +796,11 @@ function gambarMasuk() {
     '<label class="block text-sm font-medium">Jumlah masuk<input name="jumlah" type="number" inputmode="numeric" min="1" class="inp mt-1"></label>' +
     '<label class="block text-sm font-medium">Harga beli per satuan <span class="text-slate-400 font-normal">(opsional)</span><input name="hargaBeli" inputmode="numeric" class="inp mt-1"></label>' +
     '<button class="btn btn-p w-full">Simpan Barang Masuk</button></form>' +
-    '<p class="text-xs text-slate-500 mt-3">Obat belum ada di daftar? Tambahkan dulu barisnya di sheet Stok_Barang (menu tambah produk menyusul di Rilis B).</p></div>';
+    '<div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-2">' +
+    (!S.legacy ? '<button class="btn btn-s" data-a="keImport"><i class="fa-solid fa-file-import"></i> Banyak barang? Import dari Excel</button>' : '') +
+    (adaPemilik() ? '<button class="btn btn-s" data-a="produkBaru"><i class="fa-solid fa-plus"></i> Produk baru</button>' : '') +
+    '</div>' +
+    (S.legacy ? '<p class="text-xs text-slate-500 mt-3">Obat belum ada di daftar? Tambahkan barisnya di sheet Stok_Barang. Aktifkan PIN pemilik di server untuk menambah produk dari sini.</p>' : '') + '</div>';
 }
 function daftarObatMasuk() {
   const q = ($('masuk-cari').value || '').trim().toLowerCase();
@@ -934,7 +951,7 @@ function gambarPengaturan() {
   } else if (S.legacy) {
     h += '<div class="kartu p-4 text-sm text-slate-600">Nama toko dan isi struk dibaca dari sheet <b>Pengaturan</b>. Aktifkan PIN pemilik di server supaya pengaturan bisa diubah dari sini.</div>';
   }
-  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis A</p></div>';
+  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis B</p></div>';
   $('v-pengaturan').innerHTML = h;
 }
 A.keluar = async function () {
@@ -985,6 +1002,555 @@ F.gantiPin = async function (f) {
   lsSet(KEY.token, '');
   loginTampil(j.pesan || 'PIN diganti. Masuk lagi dengan PIN baru.');
 };
+
+// ---------- Rilis B: alat bantu murni (diuji terpisah, tanpa tampilan) ----------
+// <<MURNI
+function csvSel(v, sep) {
+  let s = v == null ? '' : String(v);
+  if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = "'" + s; // cegah rumus di Excel
+  if (s.indexOf('"') !== -1 || s.indexOf(sep) !== -1 || /[\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function buatCsv(matriks, sep) {
+  return '﻿' + matriks.map(function (r) { return r.map(function (c) { return csvSel(c, sep); }).join(sep); }).join('\r\n');
+}
+function parseCsv(teks) {
+  const t = String(teks || '').replace(/^﻿/, '');
+  const pertama = t.split(/\r?\n/)[0] || '';
+  let sep = ',';
+  let maks = pertama.split(',').length - 1;
+  [';', '\t'].forEach(function (c) {
+    const n = pertama.split(c).length - 1;
+    if (n > maks) { maks = n; sep = c; }
+  });
+  const hasil = [];
+  let r = [], c = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t.charAt(i);
+    if (q) {
+      if (ch === '"') {
+        if (t.charAt(i + 1) === '"') { c += '"'; i++; } else q = false;
+      } else c += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === sep) { r.push(c); c = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && t.charAt(i + 1) === '\n') i++;
+      r.push(c); hasil.push(r); r = []; c = '';
+    } else c += ch;
+  }
+  if (c !== '' || r.length) { r.push(c); hasil.push(r); }
+  return hasil;
+}
+const KOLOM_IMPOR = [
+  ['id', ['idbarang', 'id', 'kode', 'kodebarang', 'idproduk']],
+  ['nama', ['namaobat', 'nama', 'namaproduk', 'namabarang', 'produk', 'obat']],
+  ['kategori', ['kategori', 'golongan']],
+  ['satuan', ['satuan', 'unit']],
+  ['hargaJual', ['hargajual', 'jual', 'hargajualsatuan']],
+  ['hpp', ['hargabeli', 'hpp', 'hargabelihpp', 'modal', 'hargamodal']],
+  ['jumlah', ['jumlahmasuk', 'jumlah', 'qty', 'stokmasuk']],
+  ['noBatch', ['nobatch', 'batch', 'nomorbatch']],
+  ['tglExpired', ['tglexpired', 'expired', 'exp', 'kedaluwarsa', 'tanggalexpired', 'tglkedaluwarsa', 'tanggalkedaluwarsa']]
+];
+const HEADER_TEMPLATE = ['ID_Barang', 'Nama_Obat', 'Kategori', 'Satuan', 'Harga_Jual', 'Harga_Beli', 'Jumlah_Masuk', 'No_Batch', 'Tgl_Expired'];
+function normHeader(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+// matriks = daftar baris (daftar sel) dari Excel atau CSV. Mengembalikan daftar objek baris.
+function petakanBaris(m, maksBaris) {
+  let h = -1;
+  for (let i = 0; i < m.length; i++) {
+    if ((m[i] || []).some(function (c) { return String(c == null ? '' : c).trim() !== ''; })) { h = i; break; }
+  }
+  if (h === -1) throw new Error('File kosong.');
+  const peta = {};
+  m[h].forEach(function (c, j) {
+    const n = normHeader(c);
+    if (!n) return;
+    KOLOM_IMPOR.forEach(function (k) {
+      if (peta[k[0]] === undefined && k[1].indexOf(n) !== -1) peta[k[0]] = j;
+    });
+  });
+  if (peta.nama === undefined && peta.id === undefined) {
+    throw new Error('Kolom Nama_Obat tidak ditemukan di baris judul. Pakai template dari tombol Unduh template.');
+  }
+  const baris = [];
+  for (let i = h + 1; i < m.length; i++) {
+    const r = m[i] || [];
+    const o = { no: i + 1 };
+    let isi = false;
+    Object.keys(peta).forEach(function (k) {
+      let v = r[peta[k]];
+      if (v == null) v = '';
+      if (typeof v === 'string') v = v.trim();
+      else if (typeof v !== 'number') v = String(v);
+      if (v !== '') isi = true;
+      o[k] = v;
+    });
+    if (isi) baris.push(o);
+  }
+  if (!baris.length) throw new Error('Tidak ada baris data di bawah judul kolom.');
+  if (baris.length > maksBaris) {
+    throw new Error('File berisi ' + baris.length + ' baris. Maksimal ' + maksBaris + ' per import, bagi file menjadi beberapa bagian.');
+  }
+  return baris;
+}
+// MURNI>>
+
+// ---------- Rilis B: file Excel/CSV ----------
+const MAKS_BARIS_IMPOR = 500;
+let janjiXlsx = null;
+function muatXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (janjiXlsx) return janjiXlsx;
+  janjiXlsx = new Promise(function (ok, gagal) {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = function () {
+      if (window.XLSX) ok(window.XLSX);
+      else { janjiXlsx = null; gagal(new Error('Pustaka Excel tidak lengkap. Muat ulang halaman lalu coba lagi, atau pakai CSV.')); }
+    };
+    s.onerror = function () {
+      janjiXlsx = null;
+      gagal(new Error('Pustaka Excel gagal dimuat. Periksa internet, atau pakai CSV.'));
+    };
+    document.head.appendChild(s);
+  });
+  return janjiXlsx;
+}
+function bacaBuffer(file) {
+  return new Promise(function (ok, gagal) {
+    const r = new FileReader();
+    r.onload = function () { ok(r.result); };
+    r.onerror = function () { gagal(new Error('File tidak bisa dibaca.')); };
+    r.readAsArrayBuffer(file);
+  });
+}
+function bacaTeksFile(file) {
+  return new Promise(function (ok, gagal) {
+    const r = new FileReader();
+    r.onload = function () { ok(String(r.result || '')); };
+    r.onerror = function () { gagal(new Error('File tidak bisa dibaca.')); };
+    r.readAsText(file, 'utf-8');
+  });
+}
+async function bacaFileImpor(file) {
+  if (file.size > 3 * 1024 * 1024) throw new Error('File terlalu besar (maksimal 3 MB).');
+  let m;
+  if (/\.(csv|txt)$/i.test(file.name || '')) {
+    m = parseCsv(await bacaTeksFile(file));
+  } else {
+    const X = await muatXlsx();
+    const wb = X.read(await bacaBuffer(file), { type: 'array' });
+    const nama = wb.SheetNames.indexOf('Import') !== -1 ? 'Import' : wb.SheetNames[0];
+    m = X.utils.sheet_to_json(wb.Sheets[nama], { header: 1, raw: true, defval: '' });
+  }
+  return petakanBaris(m, MAKS_BARIS_IMPOR);
+}
+function unduhBlob(isi, nama, tipe) {
+  const b = new Blob([isi], { type: tipe });
+  const u = URL.createObjectURL(b);
+  const a = document.createElement('a');
+  a.href = u;
+  a.download = nama;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(u); }, 1500);
+}
+function acakId() {
+  let h = '';
+  const c = window.crypto || window.msCrypto;
+  if (c && c.getRandomValues) {
+    const a = new Uint8Array(12);
+    c.getRandomValues(a);
+    h = Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  } else {
+    for (let i = 0; i < 24; i++) h += Math.floor(Math.random() * 16).toString(16);
+  }
+  return 'imp' + h;
+}
+
+// ---------- Rilis B: menu Stok ----------
+function adaPemilik() { return !S.legacy && S.peran === 'pemilik'; }
+function cariProduk(id) {
+  return (S.produk || []).filter(function (o) { return String(o.ID_Barang) === String(id); })[0];
+}
+async function muatStok() {
+  const el = $('v-stok');
+  if (adaPemilik()) {
+    el.innerHTML = '<p class="text-center text-slate-400 py-10">Memuat stok...</p>';
+    const j = await panggil('produk');
+    if (!j) { el.innerHTML = '<p class="text-center text-slate-400 py-10">Stok belum bisa dimuat. Ketuk tombol segarkan di kanan atas.</p>'; return; }
+    S.produk = j.data || [];
+    S.produkKolom = j.kolom || { kategori: true, satuan: true };
+    S.produkRingkas = j.ringkas || null;
+  } else {
+    await refreshStok(false);
+    S.produk = S.stok;
+    S.produkKolom = { kategori: true, satuan: true };
+    S.produkRingkas = null;
+  }
+  if (S.view === 'stok') gambarStok();
+}
+function cocokStok(o, q, f) {
+  if (q) {
+    const nama = String(o.Nama_Obat || '').toLowerCase();
+    const kat = String(o.Kategori || '').toLowerCase();
+    const id = String(o.ID_Barang || '').toLowerCase();
+    if (nama.indexOf(q) === -1 && kat.indexOf(q) === -1 && id.indexOf(q) === -1) return false;
+  }
+  const s = num(o.Stok_Tersisa);
+  if (f === 'kritis') return s > 0 && s < 10;
+  if (f === 'habis') return s <= 0;
+  if (f === 'exp') {
+    const e = infoExp(o);
+    return (e.hari !== null && e.hari <= 180) || e.lewat > 0;
+  }
+  return true;
+}
+function gambarStok() {
+  const pm = adaPemilik();
+  const r = S.produkRingkas;
+  const kartu = function (judul, nilai, warna) {
+    return '<div class="kartu p-3"><div class="text-xs text-slate-500">' + judul + '</div><div class="text-lg font-bold ' + (warna || '') + '">' + nilai + '</div></div>';
+  };
+  let h = '';
+  if (pm && r) {
+    h += '<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">' +
+      kartu('Jumlah produk', r.jumlahProduk) + kartu('Stok habis', r.habis, r.habis ? 'text-rose-600' : '') +
+      kartu('Ada kedaluwarsa', r.kedaluwarsa, r.kedaluwarsa ? 'text-rose-600' : '') +
+      kartu('Nilai modal', rp(r.nilaiModal)) + kartu('Nilai jual', rp(r.nilaiJual), 'text-emerald-700') + '</div>';
+  }
+  h += '<div class="flex flex-wrap gap-2 mb-3">' +
+    '<input id="stok-cari" class="inp" style="flex:1;min-width:12rem" placeholder="Cari nama, kategori, atau ID..." value="' + esc(S.stokCari) + '" autocomplete="off">';
+  if (pm) {
+    h += '<button class="btn btn-p" data-a="produkBaru"><i class="fa-solid fa-plus"></i> Produk</button>' +
+      '<button class="btn btn-s" data-a="ekspor"><i class="fa-solid fa-file-export"></i> Ekspor</button>';
+  }
+  if (!S.legacy && S.izin.masuk) {
+    h += '<button class="btn btn-s" data-a="keImport"><i class="fa-solid fa-file-import"></i> Import Excel</button>';
+  }
+  h += '</div><div id="stok-filter" class="flex gap-2 overflow-x-auto pb-3"></div>' +
+    '<div id="stok-daftar" class="grid md:grid-cols-2 xl:grid-cols-3 gap-2"></div>';
+  $('v-stok').innerHTML = h;
+  gambarFilterStok();
+  gambarDaftarStok();
+}
+function gambarFilterStok() {
+  $('stok-filter').innerHTML = FILTER.map(function (f) {
+    return '<button class="chip ' + (S.stokFilter === f.k ? 'on' : '') + '" data-a="filterStok" data-k="' + f.k + '">' + f.t + '</button>';
+  }).join('');
+}
+function gambarDaftarStok() {
+  const el = $('stok-daftar');
+  if (!el) return;
+  const pm = adaPemilik();
+  const q = (S.stokCari || '').trim().toLowerCase();
+  const daftar = (S.produk || []).filter(function (o) { return cocokStok(o, q, S.stokFilter); });
+  const tampil = daftar.slice(0, S.stokBatas);
+  let h = tampil.map(function (o) {
+    const s = num(o.Stok_Tersisa);
+    const e = infoExp(o);
+    let badge = '';
+    if (s <= 0) badge += '<span class="mr-1 rounded-full px-2 py-0.5 text-[11px] bg-rose-100 text-rose-700">Habis</span>';
+    else if (s < 10) badge += '<span class="mr-1 rounded-full px-2 py-0.5 text-[11px] bg-amber-100 text-amber-700">Stok menipis</span>';
+    if (e.hari !== null && e.hari <= 180 && s > 0) {
+      badge += '<span class="mr-1 rounded-full px-2 py-0.5 text-[11px] ' + (e.hari <= 90 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700') + '">Exp ' + e.hari + ' hari</span>';
+    }
+    if (e.lewat > 0) badge += '<span class="rounded-full px-2 py-0.5 text-[11px] bg-slate-200 text-slate-600">' + e.lewat + ' kedaluwarsa</span>';
+    const batch = (Array.isArray(o.Batch) ? o.Batch : []).map(function (b) {
+      return '<div class="' + (b.kedaluwarsa ? 'text-rose-600' : '') + '">' + esc(b.noBatch) + ': ' + num(b.stok) +
+        (b.exp ? ' - exp ' + tglPendek(b.exp) : '') + (b.kedaluwarsa ? ' (lewat)' : '') + '</div>';
+    }).join('');
+    return '<div class="kartu p-3">' +
+      '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-semibold leading-tight">' + esc(o.Nama_Obat) + '</div>' +
+      '<div class="text-xs text-slate-500">' + esc(o.ID_Barang) + (o.Kategori ? ' - ' + esc(o.Kategori) : '') + '</div></div>' +
+      (pm ? '<button class="btn btn-s" style="padding:.35rem .7rem" data-a="produkUbah" data-id="' + esc(o.ID_Barang) + '"><i class="fa-solid fa-pen"></i> Ubah</button>' : '') + '</div>' +
+      '<div class="mt-2 flex items-end justify-between gap-2"><div><div class="text-lg font-bold ' + (s < 10 ? 'text-rose-600' : '') + '">' + s + (o.Satuan ? ' <span class="text-sm font-normal text-slate-500">' + esc(o.Satuan) + '</span>' : '') + '</div>' +
+      '<div class="mt-1">' + badge + '</div></div>' +
+      '<div class="text-right"><div class="text-emerald-700 font-semibold">' + rp(num(o.Harga_Jual)) + '</div>' +
+      (pm ? '<div class="text-xs text-slate-500">Beli ' + rp(num(o.Harga_Beli_HPP)) + '</div>' : '') + '</div></div>' +
+      (batch ? '<div class="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">' + batch + '</div>' : '') + '</div>';
+  }).join('');
+  if (!daftar.length) h = '<p class="col-span-full text-center text-slate-400 py-10">' + ((S.produk || []).length ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.') + '</p>';
+  if (daftar.length > tampil.length) {
+    h += '<div class="col-span-full text-center"><button class="btn btn-s" data-a="stokLagi">Tampilkan lebih banyak (' + tampil.length + ' dari ' + daftar.length + ')</button></div>';
+  }
+  el.innerHTML = h;
+}
+A.filterStok = function (d) { S.stokFilter = d.k; S.stokBatas = 100; gambarFilterStok(); gambarDaftarStok(); };
+A.stokLagi = function () { S.stokBatas += 100; gambarDaftarStok(); };
+
+// ---------- Rilis B: tambah / ubah produk ----------
+function formProduk(o) {
+  const baru = !o;
+  const k = S.produkKolom || { kategori: true, satuan: true };
+  const isi = function (n) { return o ? esc(o[n] == null ? '' : o[n]) : ''; };
+  let h = '<form data-f="produk" data-mode="' + (baru ? 'baru' : 'ubah') + '" data-id="' + (baru ? '' : esc(o.ID_Barang)) + '" class="space-y-3">' +
+    '<h2 class="text-lg font-bold">' + (baru ? 'Tambah Produk' : 'Ubah Produk') + '</h2>' +
+    '<label class="block text-sm font-medium">Nama produk<input name="nama" maxlength="80" class="inp mt-1" value="' + isi('Nama_Obat') + '"></label>';
+  if (k.kategori) h += '<label class="block text-sm font-medium">Kategori <span class="text-slate-400 font-normal">(opsional)</span><input name="kategori" maxlength="40" class="inp mt-1" value="' + isi('Kategori') + '"></label>';
+  if (k.satuan) h += '<label class="block text-sm font-medium">Satuan <span class="text-slate-400 font-normal">(strip, botol, dll.)</span><input name="satuan" maxlength="20" class="inp mt-1" value="' + isi('Satuan') + '"></label>';
+  h += '<div class="grid grid-cols-2 gap-2">' +
+    '<label class="block text-sm font-medium">Harga jual<input name="hargaJual" inputmode="numeric" class="inp mt-1" value="' + (o ? num(o.Harga_Jual) : '') + '"></label>' +
+    '<label class="block text-sm font-medium">Harga beli<input name="hpp" inputmode="numeric" class="inp mt-1" value="' + (o ? num(o.Harga_Beli_HPP) : '') + '"></label></div>';
+  if (baru) {
+    h += '<div class="rounded-xl bg-slate-50 p-3 space-y-2"><div class="text-sm font-medium">Stok awal <span class="text-slate-400 font-normal">(boleh dikosongkan)</span></div>' +
+      '<input name="stokAwal" type="number" inputmode="numeric" min="0" class="inp" placeholder="Jumlah">' +
+      '<input name="noBatch" maxlength="40" class="inp" placeholder="No. batch (wajib bila ada stok awal)">' +
+      '<label class="block text-xs text-slate-500">Tanggal kedaluwarsa<input name="tglExpired" type="date" class="inp mt-1"></label></div>';
+  } else {
+    h += '<p class="text-xs text-slate-500">Stok diubah lewat menu Barang Masuk atau Import Excel, bukan di sini.</p>';
+  }
+  h += '<div class="flex gap-2"><button type="button" class="btn btn-s flex-1" data-a="tutup">Batal</button><button class="btn btn-p" style="flex:2">Simpan</button></div></form>';
+  modal(h);
+}
+A.produkBaru = function () { if (adaPemilik()) formProduk(null); };
+A.produkUbah = function (d) { const o = cariProduk(d.id); if (o && adaPemilik()) formProduk(o); };
+F.produk = async function (f) {
+  if (S.sibuk) return;
+  const mode = f.dataset.mode;
+  const v = function (n) { return f.elements[n] ? String(f.elements[n].value || '').trim() : ''; };
+  const data = { mode: mode };
+  if (mode === 'ubah') {
+    data.id = f.dataset.id;
+    const o = cariProduk(data.id) || {};
+    const asal = {
+      nama: String(o.Nama_Obat || ''), kategori: String(o.Kategori || ''), satuan: String(o.Satuan || ''),
+      hargaJual: num(o.Harga_Jual), hpp: num(o.Harga_Beli_HPP)
+    };
+    let ubah = 0;
+    ['nama', 'kategori', 'satuan'].forEach(function (n) {
+      if (f.elements[n] && v(n) !== asal[n]) { data[n] = v(n); ubah++; }
+    });
+    ['hargaJual', 'hpp'].forEach(function (n) {
+      if (f.elements[n] && v(n) !== '' && num(v(n)) !== asal[n]) { data[n] = v(n); ubah++; }
+    });
+    if (!ubah) { toast('Tidak ada yang diubah.'); return; }
+    if (f.elements.nama && !v('nama')) { toast('Nama produk tidak boleh kosong.', 'err'); return; }
+  } else {
+    ['nama', 'kategori', 'satuan', 'hargaJual', 'hpp', 'stokAwal', 'noBatch', 'tglExpired'].forEach(function (n) {
+      if (f.elements[n]) data[n] = v(n);
+    });
+    if (!data.nama) { toast('Nama produk wajib diisi.', 'err'); return; }
+    if (!data.hargaJual) { toast('Harga jual wajib diisi.', 'err'); return; }
+    if (num(data.stokAwal) > 0 && !data.noBatch) { toast('No. batch wajib diisi bila ada stok awal.', 'err'); return; }
+  }
+  S.sibuk = true;
+  const j = await panggil('produkSimpan', data, {
+    jaringan: 'Koneksi terputus. Buka menu Stok dan cek dulu apakah produk sudah tersimpan sebelum mengulang.'
+  });
+  S.sibuk = false;
+  if (!j) return;
+  tutupModal();
+  toast(j.pesan || 'Tersimpan.');
+  if (S.view === 'stok') muatStok();
+  refreshStok(true);
+};
+
+// ---------- Rilis B: Import Excel ----------
+A.keImport = function () { showView('import'); };
+function gambarImport() {
+  S.imp = { baris: null, hasil: null, id: acakId(), ubahHarga: false, selesai: false };
+  const pm = adaPemilik();
+  $('v-import').innerHTML =
+    '<div class="max-w-3xl space-y-3">' +
+    '<div class="flex items-center justify-between"><h2 class="font-bold text-lg">Import Excel</h2>' +
+    '<button class="btn btn-s" data-a="nav" data-v="' + (pm ? 'stok' : 'masuk') + '">Kembali</button></div>' +
+    '<div class="kartu p-4"><div class="font-semibold mb-2">1. Unduh template, lalu isi</div>' +
+    '<div class="flex flex-wrap gap-2"><button class="btn btn-s" data-a="templateExcel"><i class="fa-solid fa-file-excel"></i> Template Excel</button>' +
+    '<button class="btn btn-s" data-a="templateCsv"><i class="fa-solid fa-file-csv"></i> Template CSV</button></div>' +
+    '<ul class="mt-3 text-sm text-slate-600 list-disc pl-5 space-y-1">' +
+    (pm ? '<li>Produk baru: <b>kosongkan ID_Barang</b>, isi Nama_Obat dan Harga_Jual.</li>' : '<li>Kasir hanya bisa memasukkan stok untuk produk yang sudah ada.</li>') +
+    '<li>Produk yang sudah ada dikenali dari ID_Barang atau Nama_Obat yang sama persis.</li>' +
+    '<li>Isi Jumlah_Masuk dan No_Batch untuk menambah stok. Tanpa No_Batch, dibuat otomatis (IMP-tanggal).</li>' +
+    '<li>Tgl_Expired tulis lengkap, misalnya 31/12/2027 atau 2027-12-31.</li>' +
+    '<li>Maksimal ' + MAKS_BARIS_IMPOR + ' baris per file. Bila ada satu baris bermasalah, tidak ada yang disimpan.</li></ul></div>' +
+    '<div class="kartu p-4"><div class="font-semibold mb-2">2. Pilih file yang sudah diisi</div>' +
+    '<input id="imp-file" type="file" accept=".xlsx,.xls,.csv,text/csv" class="block w-full text-sm">' +
+    (pm ? '<label class="flex items-center gap-2 text-sm mt-3"><input id="imp-harga" type="checkbox"> Harga di file boleh mengubah harga produk yang sudah ada</label>' : '') +
+    '</div><div id="imp-hasil"></div></div>';
+}
+A.templateExcel = async function () {
+  try {
+    const X = await muatXlsx();
+    const wb = X.utils.book_new();
+    const ws = X.utils.aoa_to_sheet([HEADER_TEMPLATE]);
+    ws['!cols'] = HEADER_TEMPLATE.map(function () { return { wch: 16 }; });
+    X.utils.book_append_sheet(wb, ws, 'Import');
+    const petunjuk = [
+      ['PETUNJUK IMPORT STOK'],
+      ['Isi di sheet Import, mulai dari baris 2. Jangan ubah judul kolom.'],
+      ['ID_Barang: kosongkan untuk produk baru. Isi untuk produk yang sudah ada.'],
+      ['Nama_Obat wajib bila ID_Barang kosong. Harga_Jual wajib untuk produk baru.'],
+      ['Jumlah_Masuk dan No_Batch: untuk menambah stok. Tgl_Expired: tulis lengkap, misalnya 31/12/2027.'],
+      [''],
+      ['CONTOH (jangan disalin ke sheet Import kecuali memang ingin diimpor)'],
+      HEADER_TEMPLATE,
+      ['', 'Paracetamol 500mg', 'Obat bebas', 'Strip', 3000, 1500, 100, 'PCT-001', '2028-06-30'],
+      ['P-001', '', '', '', '', '', 50, 'PCT-002', '2028-09-30']
+    ];
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(petunjuk), 'Petunjuk');
+    X.writeFile(wb, 'template-import-stok.xlsx');
+  } catch (e) { toast(e.message, 'err'); }
+};
+A.templateCsv = function () {
+  unduhBlob(buatCsv([HEADER_TEMPLATE], ';'), 'template-import-stok.csv', 'text/csv;charset=utf-8');
+  toast('Template CSV diunduh. Buka dengan Excel, isi, simpan sebagai CSV.');
+};
+async function prosesFileImpor(inp) {
+  const file = inp.files && inp.files[0];
+  if (!file || !S.imp) return;
+  const el = $('imp-hasil');
+  el.innerHTML = '<p class="text-center text-slate-500 py-6">Membaca file...</p>';
+  S.imp.baris = null;
+  S.imp.hasil = null;
+  S.imp.selesai = false;
+  S.imp.id = acakId();
+  try {
+    S.imp.baris = await bacaFileImpor(file);
+  } catch (e) {
+    el.innerHTML = '<p class="rounded-xl bg-rose-50 text-rose-700 text-sm p-3">' + esc(e.message) + '</p>';
+    return;
+  }
+  await periksaImpor();
+}
+async function periksaImpor() {
+  const el = $('imp-hasil');
+  if (!el || !S.imp || !S.imp.baris) return;
+  el.innerHTML = '<p class="text-center text-slate-500 py-6">Memeriksa ' + S.imp.baris.length + ' baris...</p>';
+  const j = await panggil('importProses', { mode: 'periksa', baris: S.imp.baris, ubahHarga: S.imp.ubahHarga });
+  const el2 = $('imp-hasil');
+  if (!el2) return;
+  if (!j) { el2.innerHTML = '<p class="rounded-xl bg-rose-50 text-rose-700 text-sm p-3">Pemeriksaan gagal. Pilih file lagi untuk mencoba.</p>'; return; }
+  S.imp.hasil = j;
+  gambarHasilImpor();
+}
+const WARNA_STATUS = {
+  BARU: 'bg-emerald-100 text-emerald-700', MASUK: 'bg-sky-100 text-sky-700', HARGA: 'bg-amber-100 text-amber-700',
+  LEWAT: 'bg-slate-200 text-slate-600', GALAT: 'bg-rose-100 text-rose-700'
+};
+function gambarHasilImpor() {
+  const j = S.imp && S.imp.hasil;
+  const el = $('imp-hasil');
+  if (!j || !el) return;
+  const r = j.ringkas || {};
+  const kartu = function (judul, nilai, warna) {
+    return '<div class="kartu p-3"><div class="text-xs text-slate-500">' + judul + '</div><div class="text-lg font-bold ' + (warna || '') + '">' + nilai + '</div></div>';
+  };
+  const urut = (j.baris || []).slice().sort(function (a, b) { return (b.status === 'GALAT') - (a.status === 'GALAT'); });
+  let h = '<div class="kartu p-4 space-y-3"><div class="font-semibold">3. Periksa hasilnya</div>' +
+    '<div class="grid grid-cols-2 md:grid-cols-3 gap-2">' +
+    kartu('Baris dibaca', r.baris) + kartu('Produk baru', r.produkBaru, 'text-emerald-700') + kartu('Batch masuk', r.batchMasuk) +
+    kartu('Total unit masuk', r.totalUnit) + kartu('Harga diubah', r.hargaDiubah) + kartu('Bermasalah', r.galat, r.galat ? 'text-rose-600' : '') + '</div>' +
+    '<p class="text-sm ' + (j.siap ? 'text-emerald-700' : 'text-rose-600') + '">' + esc(j.pesan || '') + '</p>' +
+    '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500"><th class="py-1 pr-2">Baris</th><th class="pr-2">Produk</th><th class="pr-2">Status</th><th class="pr-2">Stok masuk</th><th>Keterangan</th></tr></thead><tbody>' +
+    urut.map(function (b) {
+      return '<tr class="border-t border-slate-100 ' + (b.status === 'GALAT' ? 'bg-rose-50' : '') + '"><td class="py-1 pr-2">' + esc(b.no) + '</td>' +
+        '<td class="pr-2">' + esc(b.nama || '-') + '</td>' +
+        '<td class="pr-2"><span class="rounded-full px-2 py-0.5 text-[11px] ' + (WARNA_STATUS[b.status] || '') + '">' + esc(b.status) + '</span></td>' +
+        '<td class="pr-2">' + (b.jumlah ? esc(b.jumlah) + ' (' + esc(b.noBatch) + (b.tglExpired ? ', exp ' + tglPendek(b.tglExpired) : '') + ')' : '-') + '</td>' +
+        '<td>' + esc(b.pesan || '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  if (j.siap) h += '<button id="imp-simpan" class="btn btn-p w-full" data-a="impSimpan"><i class="fa-solid fa-floppy-disk"></i> Simpan ke stok</button>';
+  else h += '<p class="text-sm text-slate-500">Perbaiki baris yang bermasalah di file, lalu pilih file itu lagi di atas.</p>';
+  el.innerHTML = h + '</div>';
+}
+A.impSimpan = async function () {
+  if (S.sibuk || !S.imp || !S.imp.hasil || !S.imp.hasil.siap) return;
+  S.sibuk = true;
+  const b = $('imp-simpan');
+  if (b) { b.disabled = true; b.textContent = 'Menyimpan...'; }
+  const j = await panggil('importProses', {
+    mode: 'simpan', idImport: S.imp.id, baris: S.imp.baris, ubahHarga: S.imp.ubahHarga
+  }, {
+    jaringan: 'Koneksi terputus saat menyimpan. Ketuk Simpan lagi untuk mencoba: aman, data tidak akan tercatat dua kali. Atau cek menu Stok dulu.'
+  });
+  S.sibuk = false;
+  if (!j) {
+    const b2 = $('imp-simpan');
+    if (b2) { b2.disabled = false; b2.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan ke stok'; }
+    return;
+  }
+  S.imp.selesai = true;
+  S.imp.hasil = null;
+  const el = $('imp-hasil');
+  if (el) {
+    el.innerHTML = '<div class="kartu p-4 space-y-3"><div class="text-emerald-700 font-semibold"><i class="fa-solid fa-circle-check"></i> ' + esc(j.pesan || 'Import selesai.') + '</div>' +
+      '<div class="flex gap-2"><button class="btn btn-s flex-1" data-a="impBaru">Import file lain</button>' +
+      '<button class="btn btn-p flex-1" data-a="nav" data-v="' + (adaPemilik() ? 'stok' : 'masuk') + '">Selesai</button></div></div>';
+  }
+  refreshStok(true);
+};
+A.impBaru = function () { gambarImport(); };
+
+// ---------- Rilis B: ekspor ----------
+function barisEksporStok() {
+  return [['ID_Barang', 'Nama_Obat', 'Kategori', 'Satuan', 'Stok_Tersisa', 'Stok_Kedaluwarsa', 'Exp_Terdekat', 'Harga_Beli', 'Harga_Jual']]
+    .concat((S.produk || []).map(function (o) {
+      return [String(o.ID_Barang), o.Nama_Obat || '', o.Kategori || '', o.Satuan || '', num(o.Stok_Tersisa),
+        num(o.Stok_Kedaluwarsa), o.Tgl_Expired || '', num(o.Harga_Beli_HPP), num(o.Harga_Jual)];
+    }));
+}
+function barisEksporBatch() {
+  const hasil = [['ID_Barang', 'Nama_Obat', 'No_Batch', 'Tgl_Expired', 'Stok', 'Status']];
+  (S.produk || []).forEach(function (o) {
+    (Array.isArray(o.Batch) ? o.Batch : []).forEach(function (b) {
+      hasil.push([String(o.ID_Barang), o.Nama_Obat || '', b.noBatch || '', b.exp || '', num(b.stok), b.kedaluwarsa ? 'Kedaluwarsa' : 'Aktif']);
+    });
+  });
+  return hasil;
+}
+A.ekspor = function () {
+  if (!adaPemilik()) return;
+  modal('<h2 class="text-lg font-bold mb-3">Ekspor stok</h2>' +
+    '<p class="text-sm text-slate-500 mb-3">Berisi ' + (S.produk || []).length + ' produk beserta harga beli dan daftar batch.</p>' +
+    '<div class="space-y-2"><button class="btn btn-p w-full" data-a="eksporExcel"><i class="fa-solid fa-file-excel"></i> Excel (.xlsx)</button>' +
+    '<button class="btn btn-s w-full" data-a="eksporCsv"><i class="fa-solid fa-file-csv"></i> CSV (stok saja)</button>' +
+    '<button class="btn btn-s w-full" data-a="tutup">Batal</button></div>');
+};
+A.eksporExcel = async function () {
+  try {
+    const X = await muatXlsx();
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(barisEksporStok()), 'Stok');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(barisEksporBatch()), 'Batch');
+    X.writeFile(wb, 'stok-' + hariIni() + '.xlsx');
+    tutupModal();
+  } catch (e) { toast(e.message, 'err'); }
+};
+A.eksporCsv = function () {
+  unduhBlob(buatCsv(barisEksporStok(), ';'), 'stok-' + hariIni() + '.csv', 'text/csv;charset=utf-8');
+  tutupModal();
+};
+
+// ---------- Rilis B: riwayat aktivitas (pemilik) ----------
+const LABEL_AKSI = {
+  login: 'Masuk', masuk: 'Barang masuk', batal: 'Pembatalan', simpanPengaturan: 'Ubah pengaturan',
+  gantiPin: 'Ganti PIN', produkSimpan: 'Produk', importProses: 'Import Excel'
+};
+function gambarLog() {
+  $('v-log').innerHTML =
+    '<div class="max-w-3xl"><div class="flex flex-wrap items-center gap-2 mb-3"><h2 class="font-bold text-lg mr-auto">Riwayat Aktivitas</h2>' +
+    '<input id="log-tgl" type="date" class="inp" style="width:auto" value="' + esc(S.logTgl) + '">' +
+    '<button class="btn btn-s" data-a="logSemua">Semua</button></div>' +
+    '<div id="log-daftar"><p class="text-center text-slate-400 py-10">Memuat...</p></div></div>';
+  muatLog();
+}
+async function muatLog() {
+  const j = await panggil('log', { batas: 100, tanggal: S.logTgl || '' });
+  const el = $('log-daftar');
+  if (!el) return;
+  if (!j) { el.innerHTML = '<p class="text-center text-slate-400 py-10">Belum bisa dimuat.</p>'; return; }
+  const d = j.data || [];
+  el.innerHTML = d.length
+    ? '<div class="space-y-2">' + d.map(function (x) {
+      return '<div class="kartu p-3"><div class="flex justify-between gap-2 text-sm"><span class="font-semibold">' + esc(LABEL_AKSI[x.aksi] || x.aksi) + '</span>' +
+        '<span class="text-slate-500">' + esc(tglJam(x.waktu)) + '</span></div>' +
+        '<div class="text-xs text-slate-500">' + esc(x.pengguna) + ' (' + esc(x.peran) + ')</div>' +
+        '<div class="text-sm mt-1">' + esc(x.rincian) + '</div></div>';
+    }).join('') + '</div><p class="text-xs text-slate-400 text-center mt-3">Menampilkan sampai 100 catatan terbaru.</p>'
+    : '<p class="text-center text-slate-400 py-10">Belum ada catatan.</p>';
+}
+A.logSemua = function () { S.logTgl = ''; gambarLog(); };
 
 // ---------- Form utama ----------
 F.setup = function () {
@@ -1042,6 +1608,7 @@ document.addEventListener('submit', function (e) {
 document.addEventListener('input', function (e) {
   const t = e.target;
   if (t.id === 'cari') { S.cari = t.value; gambarKatalog(); }
+  else if (t.id === 'stok-cari') { S.stokCari = t.value; S.stokBatas = 100; gambarDaftarStok(); }
   else if (t.id === 'bayar-diterima') hitungKembali();
   else if (t.id === 'masuk-cari') {
     S.masukId = '';
@@ -1053,6 +1620,9 @@ document.addEventListener('input', function (e) {
 document.addEventListener('change', function (e) {
   const t = e.target;
   if (t.dataset && t.dataset.qty !== undefined) ubahQty(t.dataset.qty, t.value);
+  else if (t.id === 'imp-file') prosesFileImpor(t);
+  else if (t.id === 'imp-harga') { if (S.imp) { S.imp.ubahHarga = t.checked; if (S.imp.baris && !S.imp.selesai) periksaImpor(); } }
+  else if (t.id === 'log-tgl') { S.logTgl = t.value; muatLog(); }
 });
 setInterval(function () {
   if (S.masuk && !document.hidden && !$('modal-root').innerHTML && !S.sibuk) refreshStok(true);
