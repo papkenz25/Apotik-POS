@@ -56,6 +56,7 @@
       <p class="text-slate-500 text-sm">Kelola usaha Anda, Mulai dari Kasir</p>
     </div>
     <p id="setup-pesan" class="hidden rounded-xl bg-rose-50 text-rose-700 text-sm p-3"></p>
+    <p id="setup-info" class="hidden rounded-xl bg-emerald-50 text-emerald-700 text-sm p-3"></p>
     <label class="block text-sm font-medium">Alamat backend
       <input id="setup-url" class="inp mt-1" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" autocapitalize="off">
     </label>
@@ -345,6 +346,7 @@ function setupTampil(pesan) {
   const p = $('setup-pesan');
   p.textContent = pesan || '';
   p.classList.toggle('hidden', !pesan);
+  $('setup-info').classList.add('hidden');
 }
 function loginPesan(pesan) {
   const p = $('login-pesan');
@@ -373,7 +375,34 @@ function terapkanSesi(j) {
   S.set = j.pengaturan || {};
   S.metode = j.metodeAktif && j.metodeAktif.length ? j.metodeAktif : ['Tunai'];
 }
+// Link pemasangan: https://.../#u=ALAMAT&k=KUNCI. Hanya mengisi layar sambungan, pengguna tetap mengetuk "Simpan dan Hubungkan".
+const FORMAT_ALAMAT = /^https:\/\/script\.google\.com\/macros\/(?:a\/[A-Za-z0-9.\-]+\/)?s\/[A-Za-z0-9_\-]+\/exec$/;
+function bacaTautan() {
+  let h = '';
+  try { h = String(location.hash || ''); } catch (e) { return null; }
+  if (h.length < 2) return null;
+  let u = '', k = '';
+  try {
+    const q = new URLSearchParams(h.slice(1));
+    u = (q.get('u') || '').trim();
+    k = (q.get('k') || '').trim();
+  } catch (e) { return null; }
+  if (!u && !k) return null;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* abaikan */ }
+  if (!FORMAT_ALAMAT.test(u) || !/^[A-Za-z0-9_\-]{0,64}$/.test(k)) return null;
+  return { url: u, kunci: k };
+}
 async function mulai() {
+  const tautan = bacaTautan();
+  if (tautan) {
+    setupTampil();
+    $('setup-url').value = tautan.url;
+    $('setup-kunci').value = tautan.kunci;
+    const inf = $('setup-info');
+    inf.textContent = 'Alamat dan kunci akses sudah terisi dari link. Periksa, lalu ketuk Simpan dan Hubungkan.';
+    inf.classList.remove('hidden');
+    return;
+  }
   S.url = lsGet(KEY.url);
   S.kunci = lsGet(KEY.kunci);
   S.token = lsGet(KEY.token);
@@ -1060,7 +1089,7 @@ function gambarPengaturan() {
   } else if (S.legacy) {
     h += '<div class="kartu p-4 text-sm text-slate-600">Nama toko dan isi struk dibaca dari sheet <b>Pengaturan</b>. Aktifkan PIN pemilik di server supaya pengaturan bisa diubah dari sini.</div>';
   }
-  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis E</p></div>';
+  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis F</p></div>';
   $('v-pengaturan').innerHTML = h;
 }
 A.keluar = async function () {
@@ -1976,6 +2005,7 @@ F.setup = function () {
     p.classList.remove('hidden');
     return;
   }
+  if (lsGet(KEY.url) !== url) lsSet(KEY.token, '');
   lsSet(KEY.url, url);
   lsSet(KEY.kunci, ($('setup-kunci').value || '').trim());
   mulai();
