@@ -1,7 +1,7 @@
 // Papkenz Kasir - service worker.
 // Tujuan: aplikasi terbuka lebih cepat dan bisa dipasang. Data penjualan/stok TIDAK pernah disimpan di sini.
 // Naikkan angka VERSI setiap kali Anda mengganti file ini atau daftar INTI.
-const VERSI = 'pk-v2';
+const VERSI = 'pk-v3';
 const INTI = ['./', './index.html', './manifest.webmanifest', './icon-192.png'];
 const CDN = ['cdn.tailwindcss.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
