@@ -98,6 +98,7 @@
       <button data-a="segarkan" class="btn btn-s" style="padding:.5rem .75rem" title="Segarkan"><i class="fa-solid fa-rotate"></i></button>
     </div>
     <nav id="nav" class="max-w-7xl mx-auto px-2 pb-2 flex gap-1 overflow-x-auto"></nav>
+    <div id="banner-lisensi" class="hidden"></div>
   </header>
 
   <main class="max-w-7xl mx-auto p-3 md:p-4 pb-28">
@@ -200,7 +201,7 @@ const S = {
   legacy: false, masuk: false, stok: [], cari: '', filter: 'semua', keranjang: [], riwayat: [],
   view: 'kasir', sibuk: false, metodePilih: 'Tunai', struk: null, masukId: '', lap: null,
   produk: [], aturan: { daftar: [], wajib: [] }, produkKolom: { kategori: true, satuan: true }, produkRingkas: null, stokCari: '', stokFilter: 'semua', stokBatas: 100,
-  imp: null, logTgl: '', opn: null, biaya: null, kas: null
+  imp: null, logTgl: '', opn: null, biaya: null, kas: null, lisensi: null
 };
 const A = {}; // aksi klik
 const F = {}; // aksi form
@@ -246,11 +247,70 @@ async function api(aksi, data) {
   } catch (e) {
     throw new Error('JARINGAN');
   }
+  let j;
   try {
-    return await res.json();
+    j = await res.json();
   } catch (e) {
     throw new Error('Balasan server tidak terbaca. Periksa alamat backend di Pengaturan.');
   }
+  if (j && j.lisensi && typeof j.lisensi === 'object') lisensiTerima(j.lisensi);
+  return j;
+}
+
+// ---------- Langganan (lisensi) ----------
+const BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+function tglId(t) {
+  const m = String(t || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? Number(m[3]) + ' ' + BULAN_ID[Number(m[2]) - 1] + ' ' + m[1] : '';
+}
+function bacaSaja() { return !!(S.lisensi && S.lisensi.baca_saja); }
+const TULIS_A = ['bayar', 'proses', 'batalBuka', 'impSimpan', 'produkBaru', 'produkUbah', 'biayaHapus', 'biayaHapusYa', 'opnameLanjut'];
+const TULIS_F = ['batal', 'masuk', 'produk', 'opnameSimpan', 'biayaSimpan', 'kasTutup'];
+function tolakBacaSaja(nama, daftar) {
+  if (!bacaSaja() || daftar.indexOf(nama) === -1) return false;
+  toast('Langganan berakhir: aplikasi hanya bisa melihat data (baca saja).', 'err');
+  return true;
+}
+function lisensiTerima(l) {
+  S.lisensi = l;
+  gambarBannerLisensi();
+  if (S.masuk && typeof gambarKeranjang === 'function') gambarKeranjang();
+}
+function gambarBannerLisensi() {
+  const el = $('banner-lisensi');
+  if (!el) return;
+  const l = S.lisensi;
+  let teks = '', warna = '';
+  if (l) {
+    const k = l.kontak || 'penyedia aplikasi';
+    const tgl = tglId(l.berakhir);
+    if (l.status === 'aktif' && l.sisa !== null && l.sisa !== undefined && l.sisa <= 7) {
+      warna = 'amber';
+      teks = 'Langganan berakhir ' + (tgl ? tgl + ' ' : '') + '(' + (l.sisa <= 0 ? 'hari ini' : l.sisa + ' hari lagi') + '). Hubungi ' + k + ' untuk memperpanjang.';
+    } else if (l.status === 'tenggang') {
+      warna = 'orange';
+      teks = 'Langganan sudah berakhir. Masa tenggang tersisa ' + l.tenggang_sisa + ' hari, setelah itu aplikasi hanya bisa melihat data. Hubungi ' + k + ' untuk memperpanjang.';
+    } else if (l.status === 'habis') {
+      warna = 'red';
+      teks = 'Langganan berakhir' + (tgl ? ' pada ' + tgl : '') + '. Aplikasi sekarang hanya bisa melihat data (baca saja). Data Anda aman dan bisa diekspor. Hubungi ' + k + ' untuk memperpanjang.';
+    } else if (l.status === 'tidak_valid') {
+      warna = 'red'; teks = 'Kunci lisensi tidak dikenal. Aplikasi hanya bisa melihat data. Hubungi ' + k + '.';
+    } else if (l.status === 'dinonaktifkan') {
+      warna = 'red'; teks = 'Lisensi dinonaktifkan. Aplikasi hanya bisa melihat data. Hubungi ' + k + '.';
+    } else if (l.status === 'belum_diisi') {
+      warna = l.baca_saja ? 'red' : 'amber';
+      teks = l.baca_saja ? 'Kunci lisensi belum diisi. Aplikasi hanya bisa melihat data. Hubungi ' + k + '.' : 'Kunci lisensi belum diisi di server. Hubungi ' + k + ' bila ini tidak sengaja.';
+    } else if (l.status === 'tak_terverifikasi') {
+      warna = l.baca_saja ? 'red' : 'amber';
+      teks = l.baca_saja ? 'Langganan tidak bisa diverifikasi lebih dari 14 hari. Aplikasi hanya bisa melihat data. Pastikan internet aktif lalu tekan Periksa ulang.' : 'Langganan belum bisa diverifikasi. Pastikan internet aktif.';
+    }
+  }
+  if (!teks) { el.className = 'hidden'; el.innerHTML = ''; return; }
+  const kelas = { amber: 'bg-amber-50 text-amber-900 border-amber-200', orange: 'bg-orange-50 text-orange-900 border-orange-200', red: 'bg-rose-50 text-rose-900 border-rose-200' }[warna];
+  el.className = 'border-t ' + kelas;
+  el.innerHTML = '<div class="max-w-7xl mx-auto px-3 py-2 text-sm flex items-center gap-2">' +
+    '<i class="fa-solid fa-triangle-exclamation"></i><span class="flex-1">' + esc(teks) + '</span>' +
+    '<button data-a="lisensiCek" class="btn btn-s" style="padding:.3rem .6rem;font-size:.8rem">Periksa ulang</button></div>';
 }
 // Mengembalikan objek hasil bila ok, atau null bila gagal (pesan sudah ditampilkan)
 async function panggil(aksi, data, opsi) {
@@ -522,7 +582,7 @@ function gambarKeranjang() {
   }).join('') : '<p class="text-center text-slate-400 py-8">Keranjang kosong</p>';
   const total = totalKeranjang();
   $('total-keranjang').textContent = rp(total);
-  $('btn-bayar').disabled = k.length === 0;
+  $('btn-bayar').disabled = k.length === 0 || bacaSaja();
   const jumlahBarang = k.reduce(function (s, i) { return s + i.jumlah; }, 0);
   $('bar-n').textContent = jumlahBarang;
   $('bar-total').textContent = rp(total);
@@ -575,6 +635,10 @@ A.segarkan = function () {
   if (S.view === 'log') muatLog();
 };
 A.ulangi = mulai;
+A.lisensiCek = async function () {
+  const j = await panggil('lisensiCek');
+  if (j) toast(bacaSaja() ? 'Langganan belum aktif. Hubungi penyedia setelah pembayaran.' : 'Status langganan diperbarui.');
+};
 A.setupBuka = function () { setupTampil(); };
 
 // ---------- Pembayaran ----------
@@ -996,7 +1060,7 @@ function gambarPengaturan() {
   } else if (S.legacy) {
     h += '<div class="kartu p-4 text-sm text-slate-600">Nama toko dan isi struk dibaca dari sheet <b>Pengaturan</b>. Aktifkan PIN pemilik di server supaya pengaturan bisa diubah dari sini.</div>';
   }
-  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis D</p></div>';
+  h += '<p class="text-xs text-slate-400 text-center">Papkenz Kasir - Rilis E</p></div>';
   $('v-pengaturan').innerHTML = h;
 }
 A.keluar = async function () {
@@ -1949,12 +2013,20 @@ document.addEventListener('click', function (e) {
   const el = e.target.closest('[data-a]');
   if (!el) return;
   const f = A[el.dataset.a];
-  if (f) { e.preventDefault(); f(el.dataset, el); }
+  if (f) {
+    e.preventDefault();
+    if (tolakBacaSaja(el.dataset.a, TULIS_A)) return;
+    f(el.dataset, el);
+  }
 });
 document.addEventListener('submit', function (e) {
   const form = e.target;
   const f = form && form.dataset ? F[form.dataset.f] : null;
-  if (f) { e.preventDefault(); f(form); }
+  if (f) {
+    e.preventDefault();
+    if (tolakBacaSaja(form.dataset.f, TULIS_F)) return;
+    f(form);
+  }
 });
 document.addEventListener('input', function (e) {
   const t = e.target;
