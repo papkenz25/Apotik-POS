@@ -109,21 +109,24 @@
     <section id="v-kasir">
       <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-4 items-start">
         <div>
-          <input id="cari" class="inp" placeholder="Cari nama obat atau kategori..." autocomplete="off">
+          <div class="relative"><i class="fa-solid fa-magnifying-glass absolute text-slate-400" style="left:.9rem;top:50%;transform:translateY(-50%)"></i>
+          <input id="cari" class="inp" style="padding-left:2.5rem" placeholder="Cari nama obat atau kategori..." autocomplete="off"></div>
           <div id="filter" class="flex gap-2 overflow-x-auto py-3"></div>
           <div id="katalog" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2"></div>
         </div>
-        <aside id="keranjang" class="kartu p-4 mt-4 lg:mt-0 lg:sticky lg:top-28">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="font-bold"><i class="fa-solid fa-basket-shopping text-emerald-600"></i> Keranjang</h2>
-            <button data-a="kosongkan" class="text-sm text-rose-600">Kosongkan</button>
+        <aside id="keranjang" class="kartu overflow-hidden mt-4 lg:mt-0 lg:sticky lg:top-28">
+          <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+            <h2 class="font-bold"><i class="fa-solid fa-basket-shopping mr-1"></i> Keranjang</h2>
+            <button data-a="kosongkan" class="text-sm bg-white/20 rounded-full px-3 py-1">Kosongkan</button>
           </div>
+          <div class="p-4">
           <div id="daftar-keranjang" class="divide-y divide-slate-100"></div>
-          <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-200">
-            <span class="text-slate-500">Total</span>
+          <div class="flex items-center justify-between mt-3 rounded-xl bg-emerald-50 px-3 py-3">
+            <span class="text-slate-600 font-medium">Total</span>
             <span id="total-keranjang" class="text-2xl font-bold text-emerald-700">Rp 0</span>
           </div>
-          <button id="btn-bayar" data-a="bayar" class="btn btn-p w-full mt-3" disabled><i class="fa-solid fa-wallet"></i> Bayar</button>
+          <button id="btn-bayar" data-a="bayar" class="btn btn-p w-full mt-3 text-lg" style="padding:.95rem 1rem" disabled><i class="fa-solid fa-wallet"></i> Bayar</button>
+          </div>
         </aside>
       </div>
     </section>
@@ -572,6 +575,39 @@ function barisInfo(o) {
   if (o.Pabrik) x.push(esc(o.Pabrik));
   return x.length ? '<div class="text-xs text-slate-500 leading-snug">' + x.join(' - ') + '</div>' : '';
 }
+const GAYA_KATEGORI = [
+  ['keras', 'fa-prescription-bottle-medical', 'bg-rose-100', 'text-rose-600'],
+  ['terbatas', 'fa-pills', 'bg-sky-100', 'text-sky-600'],
+  ['bebas', 'fa-capsules', 'bg-emerald-100', 'text-emerald-600'],
+  ['alkes', 'fa-stethoscope', 'bg-teal-100', 'text-teal-600'],
+  ['alat', 'fa-stethoscope', 'bg-teal-100', 'text-teal-600'],
+  ['medis', 'fa-stethoscope', 'bg-teal-100', 'text-teal-600'],
+  ['masker', 'fa-head-side-mask', 'bg-teal-100', 'text-teal-600'],
+  ['sarung', 'fa-hand', 'bg-teal-100', 'text-teal-600'],
+  ['spuit', 'fa-syringe', 'bg-teal-100', 'text-teal-600'],
+  ['kosmetik', 'fa-wand-magic-sparkles', 'bg-fuchsia-100', 'text-fuchsia-600'],
+  ['kecantikan', 'fa-wand-magic-sparkles', 'bg-fuchsia-100', 'text-fuchsia-600'],
+  ['skincare', 'fa-wand-magic-sparkles', 'bg-fuchsia-100', 'text-fuchsia-600'],
+  ['kulit', 'fa-hand-holding-droplet', 'bg-fuchsia-100', 'text-fuchsia-600'],
+  ['perawatan', 'fa-pump-soap', 'bg-purple-100', 'text-purple-600'],
+  ['herbal', 'fa-seedling', 'bg-lime-100', 'text-lime-700'],
+  ['jamu', 'fa-seedling', 'bg-lime-100', 'text-lime-700'],
+  ['vitamin', 'fa-leaf', 'bg-amber-100', 'text-amber-600'],
+  ['suplemen', 'fa-leaf', 'bg-amber-100', 'text-amber-600'],
+  ['bayi', 'fa-baby', 'bg-pink-100', 'text-pink-600'],
+  ['susu', 'fa-bottle-droplet', 'bg-indigo-100', 'text-indigo-600'],
+  ['makanan', 'fa-cookie-bite', 'bg-orange-100', 'text-orange-600'],
+  ['minuman', 'fa-mug-hot', 'bg-orange-100', 'text-orange-600']
+];
+function gayaKategori(nama) {
+  const k = String(nama || '').toLowerCase();
+  for (let i = 0; i < GAYA_KATEGORI.length; i++) if (k.indexOf(GAYA_KATEGORI[i][0]) !== -1) return GAYA_KATEGORI[i];
+  return ['', 'fa-box', 'bg-slate-100', 'text-slate-500'];
+}
+function ikonProduk(o, ukuran) {
+  const g = gayaKategori(o && o.Kategori);
+  return '<span class="shrink-0 rounded-xl flex items-center justify-center ' + g[2] + ' ' + g[3] + '" style="width:' + ukuran + 'px;height:' + ukuran + 'px"><i class="fa-solid ' + g[1] + '"></i></span>';
+}
 function gambarKatalog() {
   const q = S.cari.trim().toLowerCase();
   const daftar = S.stok.filter(function (o) {
@@ -599,13 +635,14 @@ function gambarKatalog() {
       badge += '<span class="inline-block mt-1 rounded-full px-2 py-0.5 text-[11px] bg-slate-200 text-slate-600">' +
         e.lewat + ' kedaluwarsa (tidak dijual)</span>';
     }
+    const pill = habis ? '<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap bg-rose-100 text-rose-700">Habis</span>'
+      : '<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ' + (s < 10 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700') + '">Stok ' + s + (o.Satuan ? ' ' + esc(o.Satuan) : '') + '</span>';
     return '<button data-a="tambah" data-id="' + esc(o.ID_Barang) + '" ' + (habis ? 'disabled' : '') +
-      ' class="text-left kartu p-3 transition active:scale-[0.98] ' + (habis ? 'opacity-50' : 'hover:border-emerald-400') + '">' +
-      '<div class="font-semibold leading-tight">' + esc(o.Nama_Obat) + '</div>' +
-      '<div class="text-xs text-slate-500 mt-0.5">' + esc(o.Kategori || '') + '</div>' + barisInfo(o) +
-      '<div class="mt-2 flex items-end justify-between gap-1"><div class="text-emerald-700 font-bold">' + rp(num(o.Harga_Jual)) + '</div>' +
-      '<div class="text-xs ' + (s < 10 ? 'text-rose-600 font-semibold' : 'text-slate-500') + '">' +
-      (habis ? 'Habis' : 'Stok ' + s + (o.Satuan ? ' ' + esc(o.Satuan) : '')) + '</div></div>' + badge + '</button>';
+      ' class="text-left kartu p-3 transition active:scale-[0.98] ' + (habis ? 'opacity-50' : 'hover:border-emerald-400 hover:shadow-md') + '">' +
+      '<div class="flex items-start gap-2.5">' + ikonProduk(o, 38) +
+      '<div class="min-w-0"><div class="font-semibold leading-tight">' + esc(o.Nama_Obat) + '</div>' +
+      '<div class="text-xs text-slate-500 mt-0.5">' + esc(o.Kategori || '') + '</div></div></div>' + barisInfo(o) +
+      '<div class="mt-2.5 flex flex-wrap items-end justify-between gap-x-1 gap-y-1.5"><div class="text-emerald-700 font-bold text-lg leading-none whitespace-nowrap">' + rp(num(o.Harga_Jual)) + '</div>' + pill + '</div>' + badge + '</button>';
   }).join('');
   if (daftar.length === 0) h = '<p class="col-span-full text-center text-slate-400 py-10">' +
     (S.stok.length ? 'Tidak ada obat yang cocok.' : 'Memuat daftar obat...') + '</p>';
@@ -639,7 +676,7 @@ function gambarKeranjang() {
     const o = cariObat(i.id) || {};
     const harga = num(o.Harga_Jual);
     return '<div class="py-2">' +
-      '<div class="flex justify-between gap-2"><div class="font-medium leading-tight">' + esc(o.Nama_Obat || i.id) + '</div>' +
+      '<div class="flex justify-between gap-2"><div class="flex items-center gap-2 min-w-0">' + ikonProduk(o, 30) + '<div class="font-medium leading-tight">' + esc(o.Nama_Obat || i.id) + '</div></div>' +
       '<button data-a="hapus" data-id="' + esc(i.id) + '" class="text-slate-400 px-1" title="Hapus"><i class="fa-solid fa-xmark"></i></button></div>' +
       '<div class="flex items-center justify-between mt-1">' +
       '<div class="flex items-center gap-1">' +
